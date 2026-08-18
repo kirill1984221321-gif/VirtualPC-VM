@@ -12,7 +12,7 @@ if (hasGoogleServicesConfig) {
 
 android {
     namespace 'com.vectras.vm'
-    compileSdk = 37
+    compileSdk = compileApi
 
     defaultConfig {
         applicationId "com.vectras.vm"
@@ -73,7 +73,7 @@ android {
         targetCompatibility JavaVersion.VERSION_21
     }
 
-    buildToolsVersion '36.1.0'
+    buildToolsVersion toolsVersion
     ndkVersion '21'
 
     lint {
@@ -104,11 +104,9 @@ dependencies {
     implementation libs.commons.compress
     implementation libs.androidx.activity.ktx
     implementation libs.androidx.constraintlayout
-    implementation libs.androidx.preference.ktx
     implementation libs.androidx.documentfile
-    implementation libs.androidx.core.ktx
     compileOnly project(':shell-loader:stub')
-    implementation project(":terminal-view")
+    implementation project(':terminal-view')
     implementation libs.retrofit
     implementation libs.converter.gson
     implementation libs.glide
