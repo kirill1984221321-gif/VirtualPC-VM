@@ -18,7 +18,7 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.databinding.FragmentHomeRomStoreBinding;
-import com.vectras.vm.legacy.network.LegacyNetworkUtils;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.main.core.SharedData;
 
 import java.lang.reflect.Type;
@@ -94,7 +94,7 @@ public class RomStoreFragment extends Fragment {
         romStoreCallToHomeListener.updateSearchStatus(false);
         binding.linearload.setVisibility(View.VISIBLE);
 
-        LegacyNetworkUtils.get(AppConfig.vectrasRaw + "vroms-store.json", ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.vectrasRaw + "vroms-store.json", ((isSuccess, body, status, error) -> {
             binding.linearload.setVisibility(View.GONE);
             if (isSuccess) {
                 if (!body.isEmpty())
