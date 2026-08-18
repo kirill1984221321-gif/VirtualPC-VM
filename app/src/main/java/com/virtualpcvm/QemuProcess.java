@@ -17,6 +17,8 @@ public final class QemuProcess {
         void onExit(int code);
     }
 
+    private static final int MAX_LOG_CHARS = 262_144;
+
     private final QemuRuntime runtime;
     private volatile Process process;
     private volatile int exitCode = Integer.MIN_VALUE;
@@ -31,25 +33,43 @@ public final class QemuProcess {
         if (!command.get(0).equals(runtime.getBinary().getAbsolutePath())) {
             throw new IllegalArgumentException("QEMU command must use the embedded runtime executable");
         }
+        if (!runtime.isValid()) throw new IOException("Embedded QEMU runtime is invalid");
+
+        stdout.setLength(0);
+        stderr.setLength(0);
+        exitCode = Integer.MIN_VALUE;
+
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(runtime.getRuntimeDir());
-        builder.environment().remove("LD_LIBRARY_PATH");
+        // Keep execution isolated from Termux/system QEMU. The bundled shared libraries are explicit.
         builder.environment().remove("LD_PRELOAD");
+        builder.environment().put("LD_LIBRARY_PATH", runtime.getLibraryDir().getAbsolutePath());
+        builder.environment().remove("QEMU_LD_PREFIX");
+        builder.environment().remove("TERMUX_VERSION");
+        builder.environment().remove("TERMUX_APK_RELEASE");
         builder.redirectInput(ProcessBuilder.Redirect.PIPE);
-        process = builder.start();
-        exitCode = Integer.MIN_VALUE;
-        Thread outThread = stream(process.getInputStream(), true, listener);
-        Thread errThread = stream(process.getErrorStream(), false, listener);
+
+        Process launched = builder.start();
+        process = launched;
+
+        Thread outThread = stream(launched.getInputStream(), true, listener);
+        Thread errThread = stream(launched.getErrorStream(), false, listener);
         outThread.setDaemon(true);
         errThread.setDaemon(true);
         outThread.start();
         errThread.start();
+
         Thread waiter = new Thread(() -> {
             int code;
-            try { code = process.waitFor(); }
+            try { code = launched.waitFor(); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); code = -1; }
-            exitCode = code;
-            if (listener != null) listener.onExit(code);
+            synchronized (QemuProcess.this) {
+                exitCode = code;
+                if (process == launched) process = null;
+            }
+            if (listener != null) {
+                try { listener.onExit(code); } catch (Throwable ignored) { }
+            }
         }, "qemu-waiter");
         waiter.setDaemon(true);
         waiter.start();
@@ -102,15 +122,23 @@ public final class QemuProcess {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     synchronized (this) {
-                        if (isStdout) stdout.append(line).append('\n');
-                        else stderr.append(line).append('\n');
+                        appendBounded(isStdout ? stdout : stderr, line);
                     }
                     if (listener != null) {
-                        if (isStdout) listener.onStdout(line);
-                        else listener.onStderr(line);
+                        try {
+                            if (isStdout) listener.onStdout(line);
+                            else listener.onStderr(line);
+                        } catch (Throwable ignored) { }
                     }
                 }
             } catch (IOException ignored) { }
         }, isStdout ? "qemu-stdout" : "qemu-stderr");
+    }
+
+    private static void appendBounded(StringBuilder target, String line) {
+        target.append(line).append('\n');
+        if (target.length() > MAX_LOG_CHARS) {
+            target.delete(0, target.length() - MAX_LOG_CHARS);
+        }
     }
 }

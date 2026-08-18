@@ -13,28 +13,33 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-/** Owns only the embedded QEMU runtime. It never consults Termux or system PATH. */
+/** Owns only the embedded QEMU runtime. It never consults Termux or system QEMU. */
 public final class QemuRuntime {
     private static final String ASSET_ROOT = "qemu";
     private static final String RUNTIME_NAME = "qemu";
     private static final String EXPECTED_QEMU_SHA256 =
             "8db5b84de1dd197e6a62137139fa8bdaa6b2a8f89bcdb7bf0466f82f292827e0";
     private static final int MIN_LIBRARY_COUNT = 100;
+    private static final Object PREPARE_LOCK = new Object();
 
     private final Context context;
 
-    public QemuRuntime(Context context) {
-        this.context = context.getApplicationContext();
-    }
+    public QemuRuntime(Context context) { this.context = context.getApplicationContext(); }
 
     public File getRuntimeDir() { return new File(context.getFilesDir(), RUNTIME_NAME); }
     public File getBinary() { return new File(getRuntimeDir(), "qemu-system-x86_64"); }
     public File getLibraryDir() { return new File(getRuntimeDir(), "lib"); }
     public File getFirmwareDir() { return new File(getRuntimeDir(), "share/qemu"); }
 
-    public synchronized File prepare() throws IOException { return prepare(false); }
+    public File prepare() throws IOException { return prepare(false); }
 
-    public synchronized File prepare(boolean force) throws IOException {
+    public File prepare(boolean force) throws IOException {
+        synchronized (PREPARE_LOCK) {
+            return prepareLocked(force);
+        }
+    }
+
+    private File prepareLocked(boolean force) throws IOException {
         if (!force && isValid()) return getRuntimeDir();
         File tmp = new File(context.getFilesDir(), RUNTIME_NAME + ".tmp");
         File backup = new File(context.getFilesDir(), RUNTIME_NAME + ".old");

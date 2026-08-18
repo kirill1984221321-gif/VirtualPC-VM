@@ -1,7 +1,13 @@
 plugins {
     id 'com.android.application'
-    id 'com.google.gms.google-services'
-    id 'com.google.firebase.crashlytics'
+}
+
+// Firebase/Google Services remain part of the legacy stack, but CI must also be able
+// to build the new VM backend without a private google-services.json secret.
+def hasGoogleServicesConfig = file('google-services.json').isFile() && file('google-services.json').length() > 2
+if (hasGoogleServicesConfig) {
+    apply plugin: 'com.google.gms.google-services'
+    apply plugin: 'com.google.firebase.crashlytics'
 }
 
 android {
@@ -103,16 +109,10 @@ dependencies {
     implementation libs.androidx.core.ktx
     compileOnly project(':shell-loader:stub')
     implementation project(":terminal-view")
-    
-    // Retrofit
     implementation libs.retrofit
     implementation libs.converter.gson
-
-    // Glide
     implementation libs.glide
     annotationProcessor libs.compiler
-    
-    // Test dependencies
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core

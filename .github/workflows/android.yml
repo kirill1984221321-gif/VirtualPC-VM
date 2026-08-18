@@ -8,15 +8,14 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     environment: BuildAPK
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up JDK 21
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '21'
         distribution: 'temurin'
@@ -25,8 +24,18 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Create google-services.json
-      run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > app/google-services.json
+    - name: Create google-services.json when configured
+      env:
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      run: |
+        if [[ -n "$GOOGLE_SERVICES_JSON" ]]; then
+          printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > app/google-services.json
+          test -s app/google-services.json
+          echo "google-services.json configured"
+        else
+          rm -f app/google-services.json
+          echo "google-services.json not configured; legacy Firebase plugins will remain disabled"
+        fi
 
     - name: Send notification to Telegram
       run: |
@@ -40,8 +49,38 @@ jobs:
           done
         fi
 
+    - name: Validate Gradle module directories
+      shell: python
+      run: |
+        import pathlib, re
+        root = pathlib.Path('.')
+        settings = (root / 'settings.gradle').read_text(encoding='utf-8')
+        includes = re.findall(r'include\s+([^\n]+)', settings)
+        modules = []
+        for expression in includes:
+            for item in re.findall(r"['\"]:([^'\"]+)['\"]", expression):
+                modules.append(item)
+        missing = []
+        for module in modules:
+            path = root.joinpath(*module.split(':'))
+            print(f'{module} -> {path}')
+            if not path.is_dir():
+                missing.append(f'{module} ({path})')
+        if missing:
+            raise SystemExit('Missing Gradle project directories:\n' + '\n'.join(missing))
+        print(f'Validated {len(modules)} Gradle project directories')
+
+    - name: Gradle configuration check
+      run: ./gradlew tasks --no-daemon --stacktrace
+
+    - name: Inspect app dependencies
+      run: ./gradlew :app:dependencies --configuration debugRuntimeClasspath --no-daemon
+
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: ./gradlew assembleDebug --no-daemon
+
+    - name: Run JVM unit tests
+      run: ./gradlew testDebugUnitTest --no-daemon
 
     - name: Verify embedded QEMU assets in Debug APK
       run: |
@@ -55,7 +94,7 @@ jobs:
         ls -lh "$APK"
 
     - name: Build Release APK
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleRelease --no-daemon
 
     - name: Upload Debug APK as artifact
       uses: actions/upload-artifact@v4
@@ -69,51 +108,46 @@ jobs:
         name: android-release-apk
         path: app/build/outputs/apk/release/app-release.apk
 
-    - name: Upload to Telegram 
+    - name: Upload to Telegram
       run: |
-          if [[ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]]; then
-            success=true
-
-            for file in app/build/outputs/apk/release/*.apk; do
-              echo "Uploading $(basename "$file")"
-              tries=0
-              success_file=false
-              until [ $tries -ge 5 ]; do
-                success_targets=false
-                for target in \
-                  "-F chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -F message_thread_id=8" \
-                  "-F chat_id=${{ secrets.TELEGRAM_CHAT_ID_VEC }}"; do
-
-                  if curl -s -o /dev/null -F document=@"$file" $target \
-                          -F $'caption=Done! Note that this is a version that is automatically built when there are changes in the GitHub repository, not the official version. Please only install it if you really want to see what is new.\nExplore beta releases here: https://github.com/AnBui2004/Vectras-VM-Emu-Android/releases\nRun ID: '${GITHUB_RUN_ID} \
-                          https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendDocument; then
-                    success_targets=true
-                  else
-                    echo "Retrying upload for $file to target..."
-                    sleep 2
-                  fi
-                done
-
-                if $success_targets; then
-                  success_file=true
-                  break
+        if [[ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]]; then
+          success=true
+          for file in app/build/outputs/apk/release/*.apk; do
+            echo "Uploading $(basename "$file")"
+            tries=0
+            success_file=false
+            until [ $tries -ge 5 ]; do
+              success_targets=false
+              for target in \
+                "-F chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -F message_thread_id=8" \
+                "-F chat_id=${{ secrets.TELEGRAM_CHAT_ID_VEC }}"; do
+                if curl -s -o /dev/null -F document=@"$file" $target \
+                        -F $'caption=Done! Note that this is a version that is automatically built when there are changes in the GitHub repository, not the official version. Please only install it if you really want to see what is new.\nExplore beta releases here: https://github.com/AnBui2004/Vectras-VM-Emu-Android/releases\nRun ID: '${GITHUB_RUN_ID} \
+                        https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendDocument; then
+                  success_targets=true
+                else
+                  echo "Retrying upload for $file to target..."
+                  sleep 2
                 fi
-                tries=$((tries+1))
               done
-
-              if ! $success_file; then
-                echo "Upload failed for $file"
-                success=false
+              if $success_targets; then
+                success_file=true
+                break
               fi
+              tries=$((tries+1))
             done
-
-            if [ "$success" = false ]; then
-              for chat in \
-                "-d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d message_thread_id=8" \
-                "-d chat_id=${{ secrets.TELEGRAM_CHAT_ID_VEC }}"; do
-                curl -s -o /dev/null -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                     $chat \
-                    -d $'text=Something went wrong and the APK file could not be uploaded.\nExplore beta releases here: https://github.com/AnBui2004/Vectras-VM-Emu-Android/releases\nRun ID: '${GITHUB_RUN_ID}
-              done
+            if ! $success_file; then
+              echo "Upload failed for $file"
+              success=false
             fi
+          done
+          if [ "$success" = false ]; then
+            for chat in \
+              "-d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d message_thread_id=8" \
+              "-d chat_id=${{ secrets.TELEGRAM_CHAT_ID_VEC }}"; do
+              curl -s -o /dev/null -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                   $chat \
+                  -d $'text=Something went wrong and the APK file could not be uploaded.\nExplore beta releases here: https://github.com/AnBui2004/Vectras-VM-Emu-Android/releases\nRun ID: '${GITHUB_RUN_ID}
+            done
           fi
+        fi

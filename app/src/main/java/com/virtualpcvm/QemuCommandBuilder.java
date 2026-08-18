@@ -7,7 +7,9 @@ import java.util.List;
 /** Pure command generation. No process creation and no shell parsing. */
 public final class QemuCommandBuilder {
     public List<String> build(VMConfig config, QemuRuntime runtime) {
-        config.validate();
+        config.validateForStart();
+        if (!runtime.isValid()) throw new IllegalStateException("Embedded QEMU runtime is invalid");
+
         List<String> command = new ArrayList<>();
         command.add(runtime.getBinary().getAbsolutePath());
         command.add("-L"); command.add(runtime.getFirmwareDir().getAbsolutePath());
@@ -35,7 +37,7 @@ public final class QemuCommandBuilder {
 
         if ("vnc".equalsIgnoreCase(config.display)) {
             command.add("-display"); command.add("none");
-            command.add("-vnc"); command.add("127.0.0.1:" + Math.max(0, config.vncPort - 5900));
+            command.add("-vnc"); command.add("127.0.0.1:" + (config.vncPort - 5900));
         } else if ("none".equalsIgnoreCase(config.display) || "headless".equalsIgnoreCase(config.display)) {
             command.add("-display"); command.add("none");
         }
@@ -53,6 +55,7 @@ public final class QemuCommandBuilder {
         for (int i = 0; i < extras.size(); i++) {
             String arg = extras.get(i);
             if (blank(arg)) continue;
+            // Firmware search must stay tied to the embedded runtime.
             if ("-L".equals(arg)) {
                 if (i + 1 < extras.size()) i++;
                 continue;
