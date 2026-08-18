@@ -1,0 +1,78 @@
+name: Native QEMU Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/qemu-android.yml'
+      - 'android/**'
+      - 'app/**'
+      - 'qemu-rebuild/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-native-qemu:
+    name: Build QEMU 11.0.3 for Android ARM64
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout VirtualPC-VM
+        uses: actions/checkout@v4
+
+      - name: Checkout Termux Android build system
+        uses: actions/checkout@v4
+        with:
+          repository: termux/termux-packages
+          path: .ci/termux-packages
+          fetch-depth: 1
+
+      - name: Verify QEMU 11.0.3 recipe
+        working-directory: .ci/termux-packages
+        run: |
+          set -euo pipefail
+          grep -q 'TERMUX_PKG_VERSION="1:11.0.3"' x11-packages/qemu-system-x86-64/build.sh
+          grep -q 'qemu-11.0.3.tar.xz' x11-packages/qemu-system-x86-64/build.sh
+          grep -q 'aarch64-softmmu' x11-packages/qemu-system-x86-64/build.sh
+          echo 'QEMU 11.0.3 / aarch64-softmmu recipe confirmed.'
+
+      - name: Build native Android QEMU package
+        working-directory: .ci/termux-packages
+        env:
+          CI: true
+          TERMUX_PKG_API_LEVEL: 26
+          TERMUX_PKG_MAKE_PROCESSES: 2
+          CONTAINER_NAME: virtualpc-vm-qemu-builder
+        run: |
+          set -euo pipefail
+          chmod +x scripts/run-docker.sh build-package.sh
+          ./scripts/run-docker.sh ./build-package.sh -f -I -a aarch64 qemu-system-x86-64
+
+      - name: Extract qemu-system-aarch64
+        working-directory: .ci/termux-packages
+        run: |
+          set -euo pipefail
+          mkdir -p ../../native-qemu-android
+          deb=$(find output -maxdepth 1 -type f -name 'qemu-system-x86-64*.deb' | head -n 1)
+          test -n "$deb"
+          dpkg-deb -x "$deb" ../../native-qemu-android/root
+          test -f ../../native-qemu-android/root/data/data/com.termux/files/usr/bin/qemu-system-aarch64
+          cp ../../native-qemu-android/root/data/data/com.termux/files/usr/bin/qemu-system-aarch64 ../../native-qemu-android/
+          file ../../native-qemu-android/qemu-system-aarch64
+          ls -lh ../../native-qemu-android/qemu-system-aarch64
+
+      - name: Upload native QEMU artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-qemu-android-arm64
+          path: native-qemu-android/qemu-system-aarch64
+          if-no-files-found: error
+
+      - name: Upload QEMU package for dependency inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-qemu-android-package
+          path: .ci/termux-packages/output/qemu-system-x86-64*.deb
+          if-no-files-found: error
