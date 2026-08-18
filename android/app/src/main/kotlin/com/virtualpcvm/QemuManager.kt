@@ -20,10 +20,10 @@ object QemuManager {
     /** Returns the absolute path of the QEMU binary for [arch], or null if not found. */
     fun findBinary(ctx: Context, arch: Architecture): String? {
         val name = arch.binary
-        // prefer app-installed Termux binaries
+        // Prefer the app-managed QEMU runtime.
         val appBin = File(QemuInstaller.qemuDir(ctx), name)
         if (appBin.canExecute()) return appBin.absolutePath
-        // fallback to system PATH
+        // Development fallback for manually supplied binaries.
         val systemPaths = listOf(
             "/data/local/tmp/$name",
             "/usr/bin/$name",
@@ -86,8 +86,8 @@ object QemuManager {
                 add("-device"); add("hda-output,audiodev=snd0")
             }
 
-            // VNC display
-            add("-vnc"); add(":${cfg.vncDisplay}")
+            // VNC display. Bind to localhost because the Android app owns the display.
+            add("-vnc"); add("127.0.0.1:${cfg.vncDisplay}")
 
             // Disable graphical window (headless — we use VNC)
             add("-nographic")
