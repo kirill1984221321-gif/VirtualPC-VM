@@ -29,6 +29,28 @@ jobs:
           path: .ci/termux-packages
           fetch-depth: 1
 
+      - name: Diagnose workspace before recipe preflight
+        run: |
+          set -euo pipefail
+          echo "Repository HEAD:"
+          git rev-parse HEAD
+          echo "GitHub ref:"
+          echo "${GITHUB_REF}"
+          echo "GitHub SHA:"
+          echo "${GITHUB_SHA}"
+          echo "=== TERMUX DIAGNOSTICS ==="
+          git -C .ci/termux-packages rev-parse HEAD
+          git -C .ci/termux-packages status --short
+          git -C .ci/termux-packages remote -v
+          git -C .ci/termux-packages log -1 --format='%H %s'
+          echo "--- QEMU recipe ---"
+          sed -n '1,80p' .ci/termux-packages/x11-packages/qemu-system-x86-64/build.sh
+          echo "--- VERSION ---"
+          grep -n 'TERMUX_PKG_VERSION' .ci/termux-packages/x11-packages/qemu-system-x86-64/build.sh
+          echo "--- TARGET ---"
+          grep -n 'x86_64-softmmu' .ci/termux-packages/x11-packages/qemu-system-x86-64/build.sh
+          echo "=== END DIAGNOSTICS ==="
+
       - name: Verify QEMU 11.0.3 recipe
         working-directory: .ci/termux-packages
         run: |
