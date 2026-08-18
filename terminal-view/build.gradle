@@ -1,0 +1,63 @@
+apply plugin: 'com.android.library'
+apply plugin: 'maven-publish'
+
+android {
+    namespace "com.termux.view"
+    compileSdkVersion 36
+
+    dependencies {
+        implementation libs.androidx.annotation
+        api project(":terminal-emulator")
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+        //noinspection ExpiredTargetSdkVersion
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    lint {
+        targetSdk 28
+    }
+    testOptions {
+        targetSdk 28
+    }
+}
+
+dependencies {
+    testImplementation libs.junit
+}
+
+publishing {
+    publications {
+        bar(MavenPublication) {
+            groupId 'com.termux'
+            artifactId 'terminal-view'
+            version '0.106.1'
+            artifact("$buildDir/outputs/aar/terminal-view-release.aar")
+        }
+    }
+ 
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/termux/termux-app")
+
+            credentials {
+                username = System.getenv("GH_USERNAME")
+                password = System.getenv("GH_TOKEN")
+            }
+        }
+    }
+}

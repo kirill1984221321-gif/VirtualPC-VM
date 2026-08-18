@@ -1,6 +1,5 @@
 package com.virtualpcvm;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -50,7 +49,8 @@ public final class VMRepository {
 
     public synchronized void saveVM(VMConfig config) throws IOException {
         validateForRepository(config);
-        ensureUniqueName(config, storage.exists(config.id) ? config.id : null);
+        String existingId = storage.getVmDirectory(config.id).isDirectory() ? config.id : null;
+        ensureUniqueName(config, existingId);
         storage.save(config);
     }
 
