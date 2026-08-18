@@ -124,7 +124,6 @@ public final class AppNetworkUtils {
             } catch (Throwable error) {
                 if (outputFile.exists()) {
                     // A partial download must never be mistaken for a valid tool image.
-                    // The caller also cleans up its temporary .bin path on failure.
                     outputFile.delete();
                 }
                 callback.onResult(false, null, error);
@@ -153,8 +152,13 @@ public final class AppNetworkUtils {
         }
 
         try (InputStream stream = input) {
-            byte[] bytes = stream.readAllBytes();
-            return new String(bytes, StandardCharsets.UTF_8);
+            StringBuilder body = new StringBuilder();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = stream.read(buffer)) != -1) {
+                body.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+            }
+            return body.toString();
         }
     }
 
