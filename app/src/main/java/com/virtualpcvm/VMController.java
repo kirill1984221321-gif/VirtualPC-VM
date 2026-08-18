@@ -1,0 +1,106 @@
+package com.virtualpcvm;
+
+/** VM lifecycle controller. UI talks to this layer, never to Process. */
+public final class VMController {
+    public enum State { STOPPED, STARTING, RUNNING, STOPPING, ERROR }
+
+    public interface Listener {
+        void onStateChanged(State state);
+        void onLog(String line);
+        void onError(Throwable error);
+    }
+
+    private final QemuRuntime runtime;
+    private final QemuCommandBuilder commandBuilder = new QemuCommandBuilder();
+    private final Object lock = new Object();
+    private volatile State state = State.STOPPED;
+    private volatile QemuProcess process;
+    private volatile Throwable lastError;
+
+    public VMController(QemuRuntime runtime) {
+        this.runtime = runtime;
+    }
+
+    public State getState() { return state; }
+    public Throwable getLastError() { return lastError; }
+
+    public void start(VMConfig config, Listener listener) {
+        synchronized (lock) {
+            if (state == State.STARTING || state == State.RUNNING) {
+                throw new IllegalStateException("VM is already running");
+            }
+            state = State.STARTING;
+            lastError = null;
+            notifyState(listener);
+        }
+
+        Thread worker = new Thread(() -> {
+            try {
+                config.validate();
+                runtime.prepare();
+                java.util.List<String> command = commandBuilder.build(config, runtime);
+                QemuProcess qemu = new QemuProcess(runtime);
+                synchronized (lock) { process = qemu; }
+                qemu.start(command, new QemuProcess.Listener() {
+                    @Override public void onStdout(String line) { if (listener != null) listener.onLog(line); }
+                    @Override public void onStderr(String line) { if (listener != null) listener.onLog("stderr: " + line); }
+                    @Override public void onExit(int code) {
+                        synchronized (lock) {
+                            process = null;
+                            if (state != State.STOPPING) state = code == 0 ? State.STOPPED : State.ERROR;
+                        }
+                        if (listener != null) listener.onStateChanged(state);
+                    }
+                });
+                synchronized (lock) {
+                    state = State.RUNNING;
+                }
+                notifyState(listener);
+            } catch (Throwable error) {
+                synchronized (lock) {
+                    state = State.ERROR;
+                    lastError = error;
+                    process = null;
+                }
+                if (listener != null) listener.onError(error);
+                notifyState(listener);
+            }
+        }, "vm-controller-start");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    public void stop(Listener listener) {
+        QemuProcess qemu;
+        synchronized (lock) {
+            qemu = process;
+            if (qemu == null) {
+                state = State.STOPPED;
+                notifyState(listener);
+                return;
+            }
+            state = State.STOPPING;
+        }
+        notifyState(listener);
+        qemu.stop();
+    }
+
+    public void forceStop(Listener listener) {
+        QemuProcess qemu;
+        synchronized (lock) {
+            qemu = process;
+            state = State.STOPPING;
+        }
+        notifyState(listener);
+        if (qemu != null) qemu.forceStop();
+    }
+
+    public boolean isRunning() {
+        QemuProcess qemu = process;
+        return qemu != null && qemu.isRunning();
+    }
+
+    private void notifyState(Listener listener) {
+        if (listener != null) listener.onStateChanged(state);
+    }
+}
