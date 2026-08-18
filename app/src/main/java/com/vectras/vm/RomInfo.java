@@ -13,9 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
 
-import com.anbui.elephant.interaction.Interaction;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
@@ -39,7 +37,6 @@ public class RomInfo extends AppCompatActivity {
     private String contentID = "";
     private boolean isAnBuiContent;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
-    private Interaction interaction;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -233,16 +230,10 @@ public class RomInfo extends AppCompatActivity {
             }
         });
 
-        binding.lnViews.setOnClickListener((v -> DialogUtils.oneDialog(
-                RomInfo.this,
-                getString(R.string.views),
-                interaction.getFomatedViewCount() + ".",
-                getString(R.string.ok),
-                true,
-                R.drawable.show_chart_24px,
-                true,
-                null,
-                null)));
+        // Views/likes were supplied by the old Elephant network service. They are
+        // optional Store metadata and are deliberately not part of VM runtime.
+        binding.btnLike.setVisibility(View.GONE);
+        binding.lnAllViews.setVisibility(View.GONE);
 
         String finalCurrentVerifyText = currentVerifyText;
         String finalCurrentVerifyContent = currentVerifyContent;
@@ -302,8 +293,6 @@ public class RomInfo extends AppCompatActivity {
                 null,
                 null)));
 
-        binding.btnLike.setOnClickListener(v -> sendLikeUpdate());
-
         if (isAnBuiContent && PackageUtils.isInstalled("com.anbui.app", this)) {
             binding.viewinanbuiapp.setVisibility(View.VISIBLE);
             binding.viewinanbuiapp.setOnClickListener(v -> {
@@ -316,52 +305,6 @@ public class RomInfo extends AppCompatActivity {
                 }
             });
         }
-
-        if (!contentID.isEmpty()) {
-            interaction = new Interaction(this, contentID);
-
-            interaction.initialize((isSuccess, views, likes) -> {
-                if (isSuccess) {
-                    binding.btnLike.setVisibility(View.VISIBLE);
-                    String likeContent = getString(R.string.like);
-                    boolean isLiked = interaction.isLiked();
-                    likeContent = (likes == 0) ? getString(R.string.like) : interaction.getFormatedLikeCount();
-                    if (isLiked) binding.btnLike.setIcon(ContextCompat.getDrawable(RomInfo.this, R.drawable.thumb_up_filled_24px));
-                    binding.btnLike.setText(likeContent);
-
-                    binding.lnAllViews.setVisibility(View.VISIBLE);
-                    String viewsContent = interaction.getFomatedViewCount() + " " + getString(views > 1 ? R.string.unit_of_views : R.string.unit_of_view);
-                    binding.tvViews.setText(viewsContent);
-                } else {
-                    binding.lnAllViews.setVisibility(View.GONE);
-                    binding.btnLike.setVisibility(View.GONE);
-                }
-            });
-        }
-    }
-
-    private void sendLikeUpdate() {
-        if (interaction.isRequesting || !interaction.isAllowAction) return;
-
-        binding.btnLike.setIcon(ContextCompat.getDrawable(RomInfo.this, !interaction.isLiked() ? R.drawable.thumb_up_filled_24px : R.drawable.thumb_up_24px));
-        binding.btnLike.setText(!interaction.isLiked() ? getString(R.string.liked) : getString(R.string.like));
-
-        interaction.like((isSuccess, views, likes) -> {
-            if (isSuccess) {
-                binding.btnLike.setVisibility(View.VISIBLE);
-                String likeContent = getString(R.string.like);
-                boolean isLiked = interaction.isLiked();
-                likeContent = (likes == 0) ? getString(R.string.like) : interaction.getFormatedLikeCount();
-                binding.btnLike.setIcon(ContextCompat.getDrawable(RomInfo.this, !isLiked ? R.drawable.thumb_up_filled_24px : R.drawable.thumb_up_24px));
-                binding.btnLike.setText(likeContent);
-
-                binding.lnAllViews.setVisibility(View.VISIBLE);
-                String viewsContent = interaction.getFomatedViewCount() + " " + getString(views > 1 ? R.string.unit_of_views : R.string.unit_of_view);
-                binding.tvViews.setText(viewsContent);
-            } else {
-                binding.btnLike.setVisibility(View.GONE);
-            }
-        });
     }
 
     @NonNull
