@@ -26,9 +26,10 @@ import com.google.android.material.floatingactionbutton.ExtendedFloatingActionBu
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
-import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** New VirtualPC-VM UI. It talks only to repository/controller layers. */
 public final class VirtualPCMainActivity extends AppCompatActivity {
@@ -37,7 +38,7 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
     private RecyclerView list;
     private LinearLayout empty;
     private final List<VMConfig> configs = new ArrayList<>();
-    private final List<VMController> controllers = new ArrayList<>();
+    private final Map<String, VMController> controllers = new HashMap<>();
     private VmAdapter adapter;
 
     @Override
@@ -70,7 +71,7 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
 
         TextView runtimeBanner = new TextView(this);
         runtimeBanner.setPadding(dp(20), dp(8), dp(20), dp(8));
-        runtimeBanner.setText("Embedded QEMU 11.0.3");
+        runtimeBanner.setText("Embedded QEMU 11.0.3 • x86_64 guest");
         root.addView(runtimeBanner);
 
         FrameContainer content = new FrameContainer(this);
@@ -111,8 +112,8 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
     private void refresh() {
         configs.clear();
         configs.addAll(repository.listVMs());
-        while (controllers.size() < configs.size()) controllers.add(new VMController(runtime));
-        while (controllers.size() > configs.size()) controllers.remove(controllers.size() - 1);
+        controllers.keySet().removeIf(id -> configs.stream().noneMatch(config -> config.id.equals(id)));
+        for (VMConfig config : configs) controllers.computeIfAbsent(config.id, id -> new VMController(runtime));
         if (adapter != null) adapter.notifyDataSetChanged();
         if (empty != null) empty.setVisibility(configs.isEmpty() ? View.VISIBLE : View.GONE);
         if (list != null) list.setVisibility(configs.isEmpty() ? View.GONE : View.VISIBLE);
@@ -131,9 +132,9 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
         TextInputEditText cpu = field(form, "CPU", initial.cpu);
         TextInputEditText cores = field(form, "CPU count", String.valueOf(initial.cpuCount));
         TextInputEditText ram = field(form, "RAM MB", String.valueOf(initial.ramMb));
-        TextInputEditText hdd = field(form, "HDD path", initial.hdd);
-        TextInputEditText iso = field(form, "ISO path / content URI", initial.iso);
-        TextInputEditText cdrom = field(form, "CD/DVD path / content URI", initial.cdrom);
+        TextInputEditText hdd = field(form, "HDD filesystem path", initial.hdd);
+        TextInputEditText iso = field(form, "ISO filesystem path", initial.iso);
+        TextInputEditText cdrom = field(form, "CD/DVD filesystem path", initial.cdrom);
         TextInputEditText boot = field(form, "Boot order", initial.bootOrder);
         TextInputEditText video = field(form, "Video", initial.video);
         TextInputEditText vnc = field(form, "VNC port", String.valueOf(initial.vncPort));
@@ -211,7 +212,7 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
 
     private static List<String> splitExtra(String text) {
         List<String> result = new ArrayList<>();
-        if (text == null || text.isBlank()) return result;
+        if (text == null || text.trim().isEmpty()) return result;
         for (String token : text.trim().split("\\s+")) if (!token.isBlank()) result.add(token);
         return result;
     }
@@ -221,11 +222,11 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
         return String.join(" ", args);
     }
 
-    private void launch(VMConfig config, int position) {
-        VMController controller = controllers.get(position);
+    private void launch(VMConfig config) {
+        VMController controller = controllers.computeIfAbsent(config.id, id -> new VMController(runtime));
         controller.start(config, new VMController.Listener() {
             @Override public void onStateChanged(VMController.State state) {
-                runOnUiThread(() -> adapter.notifyItemChanged(position));
+                runOnUiThread(() -> adapter.notifyDataSetChanged());
             }
             @Override public void onLog(String line) {
                 if (VirtualPcSettings.isDebug(VirtualPCMainActivity.this)) android.util.Log.d("VirtualPC-VM", line);
@@ -250,7 +251,7 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
 
         @Override public void onBindViewHolder(@NonNull Holder h, int position) {
             VMConfig cfg = configs.get(position);
-            VMController controller = controllers.get(position);
+            VMController controller = controllers.computeIfAbsent(cfg.id, id -> new VMController(runtime));
             h.box.removeAllViews();
 
             TextView title = new TextView(VirtualPCMainActivity.this);
@@ -259,7 +260,7 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
             h.box.addView(title);
 
             TextView info = new TextView(VirtualPCMainActivity.this);
-            info.setText(cfg.osType + " • " + cfg.ramMb + " MB • " + cfg.cpuCount + " CPU • " + cfg.machine + "\n" + cfg.hdd);
+            info.setText(cfg.osType + " • " + cfg.architecture + " • " + cfg.ramMb + " MB • " + cfg.cpuCount + " CPU • " + cfg.machine + "\n" + cfg.hdd);
             info.setPadding(0, dp(8), 0, dp(12));
             h.box.addView(info);
 
@@ -271,11 +272,11 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
             actions.setGravity(Gravity.END);
             MaterialButton start = new MaterialButton(VirtualPCMainActivity.this);
             start.setText("Запустить");
-            start.setOnClickListener(v -> launch(cfg, position));
+            start.setOnClickListener(v -> launch(cfg));
             start.setEnabled(!controller.isRunning());
             MaterialButton stop = new MaterialButton(VirtualPCMainActivity.this);
             stop.setText("Остановить");
-            stop.setOnClickListener(v -> controller.stop(null));
+            stop.setOnClickListener(v -> requestStop(cfg));
             stop.setEnabled(controller.isRunning());
             MaterialButton settings = new MaterialButton(VirtualPCMainActivity.this);
             settings.setText("Настройки");
@@ -286,7 +287,7 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
             h.box.addView(actions);
 
             h.card.setOnLongClickListener(v -> {
-                showDeleteDialog(cfg, position);
+                showDeleteDialog(cfg);
                 return true;
             });
         }
@@ -300,15 +301,32 @@ public final class VirtualPCMainActivity extends AppCompatActivity {
         }
     }
 
-    private void showDeleteDialog(VMConfig config, int position) {
+    private void requestStop(VMConfig config) {
+        VMController controller = controllers.get(config.id);
+        if (controller == null || !controller.isRunning()) return;
+        if (!VirtualPcSettings.confirmStop(this)) {
+            controller.stop(null);
+            return;
+        }
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Остановить VM?")
+                .setMessage(config.name)
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Остановить", (d, w) -> controller.stop(null))
+                .show();
+    }
+
+    private void showDeleteDialog(VMConfig config) {
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Удалить VM?")
-                .setMessage(config.name + "\nДанные VM останутся во внутреннем storage.")
+                .setMessage(config.name + "\nКонфигурация, каталоги VM и связанные данные будут удалены.")
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("Удалить", (d, w) -> {
                     try {
-                        controllers.get(position).forceStop(null);
+                        VMController controller = controllers.get(config.id);
+                        if (controller != null) controller.forceStop(null);
                         repository.deleteVM(config.id);
+                        controllers.remove(config.id);
                         refresh();
                     } catch (Exception error) {
                         Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();

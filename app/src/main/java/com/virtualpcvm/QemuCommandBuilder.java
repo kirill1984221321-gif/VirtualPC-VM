@@ -20,13 +20,13 @@ public final class QemuCommandBuilder {
         command.add("-accel"); command.add("tcg,thread=multi");
 
         if (!blank(config.hdd)) {
-            command.add("-drive"); command.add("file=" + config.hdd + ",if=ide,format=auto");
+            command.add("-drive"); command.add("file=" + escapeDrivePath(config.hdd) + ",if=ide,format=auto");
         }
         if (!blank(config.iso)) {
-            command.add("-drive"); command.add("file=" + config.iso + ",media=cdrom,readonly=on");
+            command.add("-drive"); command.add("file=" + escapeDrivePath(config.iso) + ",media=cdrom,readonly=on");
         }
         if (!blank(config.cdrom)) {
-            command.add("-drive"); command.add("file=" + config.cdrom + ",media=cdrom,readonly=on");
+            command.add("-drive"); command.add("file=" + escapeDrivePath(config.cdrom) + ",media=cdrom,readonly=on");
         }
         if (!blank(config.bootOrder)) {
             command.add("-boot"); command.add("order=" + config.bootOrder);
@@ -63,6 +63,9 @@ public final class QemuCommandBuilder {
             command.add(arg);
         }
     }
+
+    /** QEMU -drive uses comma as an option separator; a literal comma is doubled. */
+    private static String escapeDrivePath(String path) { return path.replace(",", ",,"); }
 
     private static boolean blank(String value) { return value == null || value.trim().isEmpty(); }
 }
