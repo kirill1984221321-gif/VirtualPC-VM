@@ -1,3 +1,0 @@
-VirtualPC-VM write/read test
-Created by ChatGPT on 2026-08-18.
-If this file can be read back, GitHub write + read access is confirmed.
