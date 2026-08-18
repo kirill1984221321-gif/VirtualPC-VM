@@ -10,6 +10,25 @@ if (hasGoogleServicesConfig) {
     apply plugin: 'com.google.firebase.crashlytics'
 }
 
+// The standard Android debug keystore is the default for the new VM backend.
+// The old Vectras/Termux:X11 signing identity is opt-in and must never be generated
+// or silently substituted in CI.
+def legacySigningEnabled = (providers.gradleProperty('legacySigningEnabled').orElse('false').get() == 'true')
+def legacyStoreFilePath = providers.gradleProperty('legacyStoreFile').orElse(file('../vectras.jks').absolutePath).get()
+def legacyStorePassword = providers.gradleProperty('legacyStorePassword').orElse(providers.environmentVariable('LEGACY_SIGNING_STORE_PASSWORD').orElse('')).get()
+def legacyKeyAlias = providers.gradleProperty('legacyKeyAlias').orElse(providers.environmentVariable('LEGACY_SIGNING_KEY_ALIAS').orElse('vectras')).get()
+def legacyKeyPassword = providers.gradleProperty('legacyKeyPassword').orElse(providers.environmentVariable('LEGACY_SIGNING_KEY_PASSWORD').orElse('')).get()
+def legacyStoreFile = file(legacyStoreFilePath)
+
+if (legacySigningEnabled) {
+    if (!legacyStoreFile.isFile()) {
+        throw new GradleException("Legacy signing was explicitly requested, but the configured keystore is missing: ${legacyStoreFile}")
+    }
+    if (!legacyStorePassword || !legacyKeyAlias || !legacyKeyPassword) {
+        throw new GradleException('Legacy signing was explicitly requested, but legacy signing credentials are incomplete.')
+    }
+}
+
 android {
     namespace 'com.vectras.vm'
     compileSdk = compileApi
@@ -27,29 +46,31 @@ android {
         resValue "integer", "app_version_code", versionCode.toString()
     }
 
-    signingConfigs {
-        debug {
-            storeFile file('../vectras.jks')
-            keyAlias 'vectras'
-            storePassword '856856'
-            keyPassword '856856'
-        }
-        release {
-            storeFile file('../vectras.jks')
-            keyAlias 'vectras'
-            storePassword '856856'
-            keyPassword '856856'
+    if (legacySigningEnabled) {
+        signingConfigs {
+            legacy {
+                storeFile legacyStoreFile
+                keyAlias legacyKeyAlias
+                storePassword legacyStorePassword
+                keyPassword legacyKeyPassword
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (legacySigningEnabled) {
+                signingConfig signingConfigs.legacy
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            signingConfig signingConfigs.debug
+            // Leave the AGP-managed debug signing config untouched unless the
+            // explicitly requested legacy flow is being built.
+            if (legacySigningEnabled) {
+                signingConfig signingConfigs.legacy
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
