@@ -1,0 +1,120 @@
+name: One-time Elephant cleanup
+
+on:
+  push:
+    branches:
+      - qemu-11-arm64-runtime-ui
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor == 'kirill1984221321-gif'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Verify branch and parent
+        env:
+          EXPECTED_PARENT: c26b3e01e9704ee9c85b435842838788d371d3d9
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "qemu-11-arm64-runtime-ui"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse main)" = "$(git rev-parse origin/main)"
+
+      - name: Apply final legacy cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          replacements = {
+              Path('app/src/main/java/com/vectras/vm/main/MainActivity.java'): [
+                  ('import com.anbui.elephant.retrofit2utils.Retrofit2Utils;', 'import com.vectras.vm.network.AppNetworkUtils;'),
+                  ('Retrofit2Utils.get(AppConfig.updateJson,', 'AppNetworkUtils.get(AppConfig.updateJson,'),
+              ],
+              Path('app/src/main/java/com/vectras/vm/setupwizard/SetupWizard2Activity.java'): [
+                  ('import com.anbui.elephant.retrofit2utils.Retrofit2Utils;', 'import com.vectras.vm.network.AppNetworkUtils;'),
+                  ('Retrofit2Utils.get(AppConfig.bootstrapfileslink,', 'AppNetworkUtils.get(AppConfig.bootstrapfileslink,'),
+              ],
+              Path('app/src/main/res/values/strings.xml'): [
+                  ('<string name="host_shared_folder_format_content">Access this link on the virtual machine to access the Download folder on your device:\\n\\n%s\\n\\nYou can also send files from the virtual machine to the Download folder on your device, here\\\'s an example using curl:\\n\\n%s</string>', '<string name="host_shared_folder_format_content">Access this link on the virtual machine to access the Download folder on your device:\\n\\n%1$s\\n\\nYou can also send files from the virtual machine to the Download folder on your device, here\\\'s an example using curl:\\n\\n%2$s</string>'),
+              ],
+              Path('app/src/main/res/values-vi/strings.xml'): [
+                  ('<string name="host_shared_folder_format_content">Hãy truy cập vào liên kết này ở máy ảo để truy cập vào thư mục Download trên thiết bị của bạn:\\n\\n%s\\n\\nBạn cũng có thể gửi tệp từ trong máy ảo ra thư mục Download trên thiết bị của bạn, dưới đây là ví dụ về cách làm với curl:\\n\\n%s</string>', '<string name="host_shared_folder_format_content">Hãy truy cập vào liên kết này ở máy ảo để truy cập vào thư mục Download trên thiết bị của bạn:\\n\\n%1$s\\n\\nBạn cũng có thể gửi tệp từ trong máy ảo ra thư mục Download trên thiết bị của bạn, dưới đây là ví dụ về cách làm với curl:\\n\\n%2$s</string>'),
+              ],
+          }
+
+          for path, pairs in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f'Expected text not found in {path}: {old[:80]}')
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+
+          rom = Path('app/src/main/java/com/vectras/vm/RomInfo.java')
+          text = rom.read_text(encoding='utf-8')
+          text = text.replace('import com.vectras.vm.utils.PackageUtils;\n', '')
+          text = text.replace('    private String contentID = "";\n    private boolean isAnBuiContent;\n', '')
+          text = re.sub(r'\n        if \(getIntent\(\)\.hasExtra\("id"\).*?\n        } else if \(getIntent\(\)\.hasExtra\("vecid"\).*?\n        }\n', '\n', text, count=1, flags=re.S)
+          text = re.sub(r'\n        if \(isAnBuiContent && PackageUtils\.isInstalled\("com\.anbui\.app", this\)\) \{.*?\n        \}\n    \}\n', '\n    }\n', text, count=1, flags=re.S)
+          rom.write_text(text, encoding='utf-8')
+
+          # The facade was already deleted in the parent commit. Make the invariant explicit.
+          for root in [Path('app/src/main/java'), Path('app/src/test'), Path('app/src/androidTest')]:
+              if root.exists():
+                  for path in root.rglob('*'):
+                      if path.is_file() and path.suffix in {'.java', '.kt', '.kts'}:
+                          text = path.read_text(encoding='utf-8', errors='ignore')
+                          if 'com.anbui.elephant' in text:
+                              raise SystemExit(f'Elephant production/test reference remains: {path}')
+
+      - name: Validate Gradle and build before commit
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew tasks --no-daemon --stacktrace
+          ./gradlew :app:compileDebugJavaWithJavac --no-daemon --stacktrace
+          ./gradlew test --no-daemon --stacktrace
+          ./gradlew :shell-loader:stub:assembleDebug assembleDebug --no-daemon --stacktrace
+
+      - name: Validate no legacy keystore and QEMU assets
+        run: |
+          set -euo pipefail
+          test ! -e vectras.jks
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          unzip -Z1 app/build/outputs/apk/debug/app-debug.apk | grep -Fxq 'assets/qemu/qemu-system-x86_64'
+          unzip -Z1 app/build/outputs/apk/debug/app-debug.apk | grep -Eq '^assets/qemu/lib/.+'
+          unzip -Z1 app/build/outputs/apk/debug/app-debug.apk | grep -Eq '^assets/qemu/share/qemu/.+'
+          rm -f /tmp/qemu-system-x86_64
+          unzip -p app/build/outputs/apk/debug/app-debug.apk 'assets/qemu/qemu-system-x86_64' > /tmp/qemu-system-x86_64
+          readelf -h /tmp/qemu-system-x86_64 | grep -Eq 'Machine:[[:space:]]+AArch64'
+
+      - name: Update audit documentation
+        shell: python
+        run: |
+          from pathlib import Path
+          Path('docs/legacy-elephant-audit.md').write_text('''# Legacy Elephant audit\n\n## Current result\n\nThe historical `com.anbui.elephant` interaction stack was legacy Store/social telemetry, not VM execution. `Interaction` contacted the Anbui `egg` service for view/like counters, persisted social state, and used the old `LogPrinter` and `Retrofit2Utils` helpers. It was not part of VM configuration, storage, QEMU process management, display, input, or lifecycle.\n\nThe interaction classes were removed from this branch. `RomInfo` keeps ROM metadata/import/download behavior, while the old view/like UI is hidden instead of being replaced with fake values. The old An Bui-app launch path is also removed from `RomInfo`.\n\n`LogPrinter`, `Interaction`, `DataInteraction`, and `InteractionUtils` are absent from the current production source. The remaining `com.anbui.elephant.retrofit2utils.Retrofit2Utils` compatibility facade was removed as well. There is no production `com.anbui.elephant` dependency.\n\nOptional Store/Updater/setup HTTP functionality now uses the project-owned `com.vectras.vm.network.AppNetworkUtils`, which performs real HTTP operations asynchronously. The QEMU runtime does not depend on it.\n\n## Historical origin\n\n- `a2b633a24bbe3d1426e3d269037e0b49a6f2eb17` — removed the 307-line `Interaction` social/telemetry implementation.\n- `c42a9637558ba9188164bf11267fc14cf5691b1d` — removed `DataInteraction`.\n- `4dfa4597cd9253343269303417d60e2a517e6782` — removed `InteractionUtils`.\n- `1c27dcc9cfa1b83646a821ffbb6a99479ef2a512` — removed the empty interaction package marker.\n- `65d341aae5c0b16d9a566c12fbc9d0dfe156240a` — briefly added a compatibility facade while remaining imports were migrated.\n- `c26b3e01e9704ee9c85b435842838788d371d3d9` — removed the final legacy network compatibility implementation.\n\n## Architectural boundary\n\nThe new VM path remains:\n\n`VirtualPC UI -> VM controller/config/storage -> QemuRuntime/QemuProcess -> embedded ARM64 QEMU`\n\nStore, updater, and setup networking are optional infrastructure and must not become dependencies of QEMU runtime startup.\n\n## Signing\n\nNormal debug builds use the Android-managed debug signing configuration. The historical Vectras/Termux:X11 keystore remains opt-in through `legacySigningEnabled` and is never generated or committed by CI.\n''', encoding='utf-8')
+
+      - name: Commit verified cleanup
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/_one_time_elephant_cleanup.yml
+          git add app/src/main/java/com/vectras/vm/main/MainActivity.java \
+                  app/src/main/java/com/vectras/vm/setupwizard/SetupWizard2Activity.java \
+                  app/src/main/java/com/vectras/vm/RomInfo.java \
+                  app/src/main/res/values/strings.xml \
+                  app/src/main/res/values-vi/strings.xml \
+                  docs/legacy-elephant-audit.md \
+                  .github/workflows/_one_time_elephant_cleanup.yml
+          git diff --cached --check
+          git commit -m 'refactor: remove final Elephant references'
+          git push origin HEAD:qemu-11-arm64-runtime-ui
