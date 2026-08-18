@@ -38,7 +38,8 @@ public final class VMController {
         Thread worker = new Thread(() -> {
             QemuProcess qemu = null;
             try {
-                config.validate();
+                if (config == null) throw new IllegalArgumentException("VM config is null");
+                config.validateForStart();
                 runtime.prepare();
                 synchronized (lock) {
                     if (token != generation || state != State.STARTING) return;
@@ -54,6 +55,7 @@ public final class VMController {
                     @Override public void onStdout(String line) { if (listener != null) listener.onLog(line); }
                     @Override public void onStderr(String line) { if (listener != null) listener.onLog("stderr: " + line); }
                     @Override public void onExit(int code) {
+                        State newState;
                         synchronized (lock) {
                             if (process == runningProcess) process = null;
                             if (token == generation && state != State.STOPPING) {
@@ -62,8 +64,11 @@ public final class VMController {
                             } else if (token == generation && state == State.STOPPING) {
                                 state = State.STOPPED;
                             }
+                            newState = state;
                         }
-                        if (listener != null) listener.onStateChanged(state);
+                        if (listener != null) {
+                            try { listener.onStateChanged(newState); } catch (Throwable ignored) { }
+                        }
                     }
                 });
                 synchronized (lock) {
@@ -83,7 +88,9 @@ public final class VMController {
                     lastError = error;
                     process = null;
                 }
-                if (listener != null) listener.onError(error);
+                if (listener != null) {
+                    try { listener.onError(error); } catch (Throwable ignored) { }
+                }
                 notifyState(listener);
             }
         }, "vm-controller-start");
@@ -105,6 +112,11 @@ public final class VMController {
         }
         notifyState(listener);
         qemu.stop();
+        synchronized (lock) {
+            if (process == qemu) process = null;
+            state = State.STOPPED;
+        }
+        notifyState(listener);
     }
 
     public void forceStop(Listener listener) {
@@ -117,7 +129,8 @@ public final class VMController {
         notifyState(listener);
         if (qemu != null) qemu.forceStop();
         synchronized (lock) {
-            if (process == null) state = State.STOPPED;
+            if (process == qemu) process = null;
+            state = State.STOPPED;
         }
         notifyState(listener);
     }
@@ -128,6 +141,8 @@ public final class VMController {
     }
 
     private void notifyState(Listener listener) {
-        if (listener != null) listener.onStateChanged(state);
+        if (listener != null) {
+            try { listener.onStateChanged(state); } catch (Throwable ignored) { }
+        }
     }
 }
