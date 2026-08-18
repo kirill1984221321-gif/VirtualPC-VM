@@ -19,6 +19,8 @@ public final class QemuProcess {
     }
 
     private static final int MAX_LOG_CHARS = 262_144;
+    private static final long STOP_TIMEOUT_MS = 2_000L;
+    private static final long STOP_POLL_MS = 25L;
 
     private final QemuRuntime runtime;
     private volatile Process process;
@@ -86,9 +88,16 @@ public final class QemuProcess {
         current.destroy();
         try {
             if (Build.VERSION.SDK_INT >= 26) {
-                if (!current.waitFor(2, TimeUnit.SECONDS)) destroyForciblyCompat(current);
+                if (!current.waitFor(STOP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    destroyForciblyCompat(current);
+                    current.waitFor(STOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                }
             } else {
-                Thread.sleep(2000L);
+                long deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS;
+                while (isAlive(current) && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(STOP_POLL_MS);
+                }
+                if (isAlive(current)) destroyForciblyCompat(current);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
