@@ -49,7 +49,7 @@ public class ShellExecutor {
             logWriter.write("Running command: " + command + "\n");
             logWriter.flush();
 
-            // Run a single command instead of keeping an interactive shell open forever.
+            // Run one command instead of leaving an interactive shell open forever.
             process = new ProcessBuilder("/system/bin/sh", "-c", command)
                     .redirectErrorStream(true)
                     .start();
@@ -104,9 +104,6 @@ public class ShellExecutor {
         Process process = shellExecutorProcess;
         if (process != null) {
             process.destroy();
-            if (process.isAlive()) {
-                process.destroyForcibly();
-            }
         }
 
         Future<?> future = processFuture;
