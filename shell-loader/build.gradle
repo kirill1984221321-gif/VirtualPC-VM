@@ -1,7 +1,11 @@
 //file:noinspection UnnecessaryQualifiedReference, GrDeprecatedAPIUsage
 apply plugin: 'com.android.application'
 
-def appSigningConfig = project(':app').android.signingConfigs.debug
+// shell-loader is the legacy Termux:X11 loader. It is not part of the new
+// com.virtualpcvm backend and therefore must not impose its historical signing
+// identity on normal debug builds.
+def legacyLoaderEnabled = providers.gradleProperty('legacySigningEnabled').orElse('false').get() == 'true'
+def appSigningConfig = legacyLoaderEnabled ? project(':app').android.signingConfigs.findByName('legacy') : null
 
 def javaStringLiteral = { String value ->
     groovy.json.JsonOutput.toJson(value)
@@ -25,7 +29,15 @@ android.buildFeatures.buildConfig true
 android.compileOptions.sourceCompatibility SDK_VERSION
 android.compileOptions.targetCompatibility SDK_VERSION
 dependencies.compileOnly project(':shell-loader:stub')
+
 androidComponents {
+    // The legacy loader is intentionally excluded from ordinary root builds.
+    // It becomes buildable only when a caller explicitly supplies the legacy
+    // signing configuration and keystore through Gradle properties/environment.
+    beforeVariants(selector().all()) { variant ->
+        variant.enable = legacyLoaderEnabled
+    }
+
     onVariants(selector().all()) { variant ->
         variant.outputs.forEach { output ->
             output.outputFileName.set("loader.apk")
@@ -33,31 +45,35 @@ androidComponents {
     }
 }
 
-def signingConfig = project(':app').android.signingConfigs.debug
-if (signingConfig?.storeFile == null || !signingConfig.storeFile.exists()) {
-    throw new GradleException("Debug signing keystore is missing: ${signingConfig?.storeFile}. Create vectras.jks before configuring shell-loader.")
-}
-if (!signingConfig.keyAlias || !signingConfig.keyPassword) {
-    throw new GradleException('Debug signing configuration is incomplete: keyAlias/keyPassword must be configured for shell-loader.')
-}
+if (legacyLoaderEnabled) {
+    if (appSigningConfig == null) {
+        throw new GradleException('Legacy shell-loader build requested, but app legacy signing configuration is unavailable.')
+    }
+    if (appSigningConfig.storeFile == null || !appSigningConfig.storeFile.isFile()) {
+        throw new GradleException("Legacy shell-loader signing keystore is missing: ${appSigningConfig.storeFile}")
+    }
+    if (!appSigningConfig.keyAlias || !appSigningConfig.keyPassword) {
+        throw new GradleException('Legacy shell-loader signing configuration is incomplete: keyAlias/keyPassword must be configured.')
+    }
 
-def keyStore = java.security.KeyStore.getInstance(java.security.KeyStore.getDefaultType())
-keyStore.load(new FileInputStream(signingConfig.storeFile), signingConfig.keyPassword.toCharArray())
-def certificate = keyStore.getCertificate(signingConfig.keyAlias)
-if (certificate == null) {
-    throw new GradleException("Debug signing certificate was not found for alias '${signingConfig.keyAlias}'.")
-}
+    def keyStore = java.security.KeyStore.getInstance(java.security.KeyStore.getDefaultType())
+    keyStore.load(new FileInputStream(appSigningConfig.storeFile), appSigningConfig.keyPassword.toCharArray())
+    def certificate = keyStore.getCertificate(appSigningConfig.keyAlias)
+    if (certificate == null) {
+        throw new GradleException("Legacy shell-loader certificate was not found for alias '${appSigningConfig.keyAlias}'.")
+    }
 
-def signatureHash = Arrays.hashCode(certificate.getEncoded())
-def commitValue = ("git rev-parse HEAD\n".execute().getText().trim() ?: (System.getenv('CURRENT_COMMIT') ?: 'NO_COMMIT'))
-def packageNotInstalledErrorText = '''Termux:X11 application is not found.
+    def signatureHash = Arrays.hashCode(certificate.getEncoded())
+    def commitValue = ("git rev-parse HEAD\n".execute().getText().trim() ?: (System.getenv('CURRENT_COMMIT') ?: 'NO_COMMIT'))
+    def packageNotInstalledErrorText = '''Termux:X11 application is not found.
 You should choose the latest successful workflow here: https://github.com/termux/termux-x11/actions/workflows/debug_build.yml
 After this you should download "termux-x11-ARCH-debug" or "termux-x11-universal-debug" artifact and install the APK contained in this zip file.'''
-def packageSignatureMismatchErrorText = "Signature verification of target application ${android.namespace} failed.\nPlease, reinstall both Termux:X11 package and Termux:X11 application from the same source"
+    def packageSignatureMismatchErrorText = "Signature verification of target application ${android.namespace} failed.\nPlease, reinstall both Termux:X11 package and Termux:X11 application from the same source"
 
-android.defaultConfig.buildConfigField "String", "logTag", javaStringLiteral('Termux:X11 loader')
-android.defaultConfig.buildConfigField "int", "SIGNATURE", String.valueOf(signatureHash)
-android.defaultConfig.buildConfigField "String", "CLASS_ID", javaStringLiteral('com.vectras.vm.x11.CmdEntryPoint')
-android.defaultConfig.buildConfigField "String", "packageNotInstalledErrorText", javaStringLiteral(packageNotInstalledErrorText)
-android.defaultConfig.buildConfigField "String", "packageSignatureMismatchErrorText", javaStringLiteral(packageSignatureMismatchErrorText)
-android.defaultConfig.buildConfigField "String", "COMMIT", javaStringLiteral(commitValue)
+    android.defaultConfig.buildConfigField "String", "logTag", javaStringLiteral('Termux:X11 loader')
+    android.defaultConfig.buildConfigField "int", "SIGNATURE", String.valueOf(signatureHash)
+    android.defaultConfig.buildConfigField "String", "CLASS_ID", javaStringLiteral('com.vectras.vm.x11.CmdEntryPoint')
+    android.defaultConfig.buildConfigField "String", "packageNotInstalledErrorText", javaStringLiteral(packageNotInstalledErrorText)
+    android.defaultConfig.buildConfigField "String", "packageSignatureMismatchErrorText", javaStringLiteral(packageSignatureMismatchErrorText)
+    android.defaultConfig.buildConfigField "String", "COMMIT", javaStringLiteral(commitValue)
+}
