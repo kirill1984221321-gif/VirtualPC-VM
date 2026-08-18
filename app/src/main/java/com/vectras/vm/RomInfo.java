@@ -17,16 +17,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
-import com.vectras.qemu.MainSettingsManager;
 import com.vectras.vm.creator.VMCreatorActivity;
 import com.vectras.vm.databinding.ActivityRomInfoBinding;
 import com.vectras.vm.utils.DialogUtils;
 import com.vectras.vm.utils.FileUtils;
 import com.vectras.vm.utils.ImageUtils;
-import com.vectras.vm.utils.PackageUtils;
 
 import java.io.File;
-import java.net.URISyntaxException;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,9 +31,7 @@ import java.util.concurrent.Executors;
 public class RomInfo extends AppCompatActivity {
     ActivityRomInfoBinding binding;
     public static boolean isFinishNow = false;
-    private String contentID = "";
-    private boolean isAnBuiContent;
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -181,17 +176,6 @@ public class RomInfo extends AppCompatActivity {
             Glide.with(this).load(getIntent().getStringExtra("icon")).placeholder(R.drawable.ic_computer_180dp_with_padding).error(R.drawable.ic_computer_180dp_with_padding).into(binding.ivIcon);
         }
 
-        if (getIntent().hasExtra("id") &&
-                !Objects.requireNonNull(getIntent().getStringExtra("id")).isEmpty()) {
-            contentID = getIntent().getStringExtra("id");
-            isAnBuiContent = true;
-
-        } else if (getIntent().hasExtra("vecid") &&
-                !Objects.requireNonNull(getIntent().getStringExtra("vecid")).isEmpty()) {
-
-            contentID = getIntent().getStringExtra("vecid");
-        }
-
         int currentVerifyIcon = R.drawable.verified_user_24px;
         String currentVerifyText = getString(R.string.verified);
         String currentVerifyContent = getString(R.string.verified_content);
@@ -292,19 +276,6 @@ public class RomInfo extends AppCompatActivity {
                 true,
                 null,
                 null)));
-
-        if (isAnBuiContent && PackageUtils.isInstalled("com.anbui.app", this)) {
-            binding.viewinanbuiapp.setVisibility(View.VISIBLE);
-            binding.viewinanbuiapp.setOnClickListener(v -> {
-                Intent intent;
-                try {
-                    intent = Intent.parseUri("intent://content/" + contentID + "#Intent;scheme=anbui;package=com.anbui.app;S.browser_fallback_url=https%3A%2F%2Fanbui.ovh%2Fapps%2Fgetanbuiapp.html;end", Intent.URI_INTENT_SCHEME);
-                    startActivity(intent);
-                } catch (Exception ignored) {
-                    binding.viewinanbuiapp.setVisibility(View.GONE);
-                }
-            });
-        }
     }
 
     @NonNull
