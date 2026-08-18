@@ -18,7 +18,7 @@ import com.vectras.qemu.MainSettingsManager;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.R;
 import com.vectras.vm.databinding.ActivityUpdaterBinding;
-import com.vectras.vm.legacy.network.LegacyNetworkUtils;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.utils.DialogUtils;
 import com.vectras.vm.utils.PackageUtils;
 
@@ -81,7 +81,7 @@ public class UpdaterActivity extends AppCompatActivity {
         int versionCode = PackageUtils.getThisVersionCode(getApplicationContext());
         String versionName = PackageUtils.getThisVersionName(getApplicationContext());
 
-        LegacyNetworkUtils.get(AppConfig.vectrasRaw + "UpdateConfig.json", ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.vectrasRaw + "UpdateConfig.json", ((isSuccess, body, status, error) -> {
             if (isSuccess) {
                 binding.lpiProgressbar.setVisibility(View.GONE);
                 binding.lnBottombar.setVisibility(View.VISIBLE);
@@ -108,7 +108,7 @@ public class UpdaterActivity extends AppCompatActivity {
 
                         if (versionCode < versionCodeonUpdate) {
                             binding.collapsingToolbarLayout.setTitle(getText(R.string.new_update_available));
-                            binding.collapsingToolbarLayout.setSubtitle(getString(R.string.whats_new));
+                            binding.collapsingToolbarLayout.setSubtitle(getText(R.string.whats_new));
                             binding.mcvWhatsnew.setVisibility(View.VISIBLE);
                             binding.tvWhatsnewcontent.setMovementMethod(LinkMovementMethod.getInstance());
                             binding.tvWhatsnewcontent.setText(Html.fromHtml(whatsnew + "<br><br>Update size:<br>" + size));
