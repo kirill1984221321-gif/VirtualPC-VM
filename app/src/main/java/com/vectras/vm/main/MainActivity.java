@@ -31,7 +31,6 @@ import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.anbui.elephant.retrofit2utils.Retrofit2Utils;
 import com.google.android.material.behavior.HideViewOnScrollBehavior;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
@@ -75,6 +74,7 @@ import com.vectras.vm.utils.LibraryChecker;
 import com.vectras.vm.utils.NotificationUtils;
 import com.vectras.vm.utils.PackageUtils;
 import com.vectras.vm.utils.UIUtils;
+import com.vectras.vm.network.AppNetworkUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -458,7 +458,7 @@ public class MainActivity extends AppCompatActivity implements RomStoreFragment.
 
     private void setupDrawer() {
         //Setting Navigation View Item Selected Listener to handle the item click of the navigation menu
-        // This method will trigger on item Click of navigation menu
+        // This method will trigger on item Click of the navigation menu
         binding.navView.setNavigationItemSelectedListener(menuItem -> {
             //Closing drawer on item click
             binding.drawerLayout.closeDrawers();
@@ -546,7 +546,7 @@ public class MainActivity extends AppCompatActivity implements RomStoreFragment.
         int versionCode = PackageUtils.getThisVersionCode(getApplicationContext());
 //        String versionName = PackageUtils.getThisVersionName(getApplicationContext());
 
-        Retrofit2Utils.get(AppConfig.updateJson, ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.updateJson, ((isSuccess, body, status, error) -> {
             if (isSuccess) {
                 if (!body.isEmpty()) {
                     try {
