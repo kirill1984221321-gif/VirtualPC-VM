@@ -22,6 +22,7 @@ junitVersion = "1.3.0"
 lottie = "6.7.1"
 material = "1.14.0"
 preferenceKtx = "1.2.1"
+retrofit = "2.9.0"
 swiperefreshlayout = "1.2.0"
 viewpager = "1.1.0"
 window = "1.5.1"
@@ -45,6 +46,7 @@ androidx-window = { group = "androidx.window", name = "window", version.ref = "w
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
 commons-io = { group = "commons-io", name = "commons-io", version.ref = "commonsIo" }
 compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
+converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics-gradle = { group = "com.google.firebase", name = "firebase-crashlytics-gradle", version.ref = "firebaseCrashlyticsGradle" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
@@ -60,3 +62,4 @@ lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottie"
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 play-services-oss-licenses-plugin = { group = "com.google.android.gms", name = "oss-licenses-plugin", version.ref = "playServicesOssLicensesPlugin" }
 play-services-oss-licenses = { group = "com.google.android.gms", name = "oss-licenses", version.ref = "playServicesOssLicenses" }
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
