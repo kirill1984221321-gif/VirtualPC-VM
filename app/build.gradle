@@ -128,8 +128,6 @@ dependencies {
     implementation libs.androidx.documentfile
     compileOnly project(':shell-loader:stub')
     implementation project(':terminal-view')
-    implementation libs.retrofit
-    implementation libs.converter.gson
     implementation libs.glide
     annotationProcessor libs.compiler
     testImplementation libs.junit
