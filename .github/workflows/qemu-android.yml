@@ -92,9 +92,17 @@ jobs:
           path: native-qemu-android/qemu-system-x86_64
           if-no-files-found: error
 
+      - name: Prepare QEMU package artifact filename
+        working-directory: .ci/termux-packages
+        run: |
+          set -euo pipefail
+          deb=$(find output -maxdepth 1 -type f -name 'qemu-system-x86-64*.deb' | head -n 1)
+          test -n "$deb"
+          cp "$deb" output/qemu-system-x86-64_1-11.0.3_aarch64.deb
+
       - name: Upload QEMU package for dependency inspection
         uses: actions/upload-artifact@v4
         with:
           name: native-qemu-android-package
-          path: .ci/termux-packages/output/qemu-system-x86-64*.deb
+          path: .ci/termux-packages/output/qemu-system-x86-64_1-11.0.3_aarch64.deb
           if-no-files-found: error
