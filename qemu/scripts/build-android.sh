@@ -41,13 +41,26 @@ if [[ ! -d "$SRC_DIR/glib-${GLIB_VERSION}" ]]; then
   tar -xf "$SRC_DIR/$GLIB_ARCHIVE" -C "$SRC_DIR"
 fi
 
+# Meson uses the host pkg-config executable to inspect target .pc files.
+# Keep it isolated from the Ubuntu runner so QEMU can never pick up host GLib.
+PKG_WRAPPER="$BUILD_DIR/pkg-config-android"
+cat > "$PKG_WRAPPER" <<EOF
+#!/usr/bin/env bash
+export PKG_CONFIG_DIR=
+export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig:$PREFIX/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="$PREFIX"
+exec pkg-config "\$@"
+EOF
+chmod +x "$PKG_WRAPPER"
+export PKG_CONFIG="$PKG_WRAPPER"
+
 cat > "$BUILD_DIR/android-aarch64.cross" <<EOF
 [binaries]
 c = ['$TOOLCHAIN/bin/clang', '--target=${ANDROID_TRIPLE}${ANDROID_API}']
 cpp = ['$TOOLCHAIN/bin/clang++', '--target=${ANDROID_TRIPLE}${ANDROID_API}']
 ar = '$AR'
 strip = '$STRIP'
-pkgconfig = '$TOOLCHAIN/bin/llvm-pkg-config'
+pkgconfig = '$PKG_WRAPPER'
 
 [host_machine]
 system = 'android'
@@ -84,18 +97,6 @@ meson setup "$BUILD_DIR/glib" "$SRC_DIR/glib-${GLIB_VERSION}" \
   -Dgobject_introspection=disabled
 meson compile -C "$BUILD_DIR/glib"
 meson install -C "$BUILD_DIR/glib"
-
-# Use only target pkg-config metadata from our private sysroot.
-PKG_WRAPPER="$BUILD_DIR/pkg-config-android"
-cat > "$PKG_WRAPPER" <<EOF
-#!/usr/bin/env bash
-export PKG_CONFIG_DIR=
-export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig:$PREFIX/share/pkgconfig"
-export PKG_CONFIG_SYSROOT_DIR="$PREFIX"
-exec pkg-config "\$@"
-EOF
-chmod +x "$PKG_WRAPPER"
-export PKG_CONFIG="$PKG_WRAPPER"
 
 QEMU_ARCHIVE_PATH="$SRC_DIR/$QEMU_ARCHIVE"
 if [[ ! -f "$QEMU_ARCHIVE_PATH" ]]; then
