@@ -19,7 +19,7 @@ import com.google.gson.Gson;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.main.romstore.DataRoms;
 import com.vectras.vm.databinding.FragmentHomeSoftwareStoreBinding;
-import com.vectras.vm.legacy.network.LegacyNetworkUtils;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.main.core.SharedData;
 
 import java.lang.reflect.Type;
@@ -95,7 +95,7 @@ public class SoftwareStoreFragment extends Fragment {
         softwareStoreCallToHomeListener.updateSearchStatus(false);
         binding.linearload.setVisibility(View.VISIBLE);
 
-        LegacyNetworkUtils.get(AppConfig.vectrasRaw + "software-store.json", ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.vectrasRaw + "software-store.json", ((isSuccess, body, status, error) -> {
             binding.linearload.setVisibility(View.GONE);
             if (isSuccess) {
                 if (!body.isEmpty())
