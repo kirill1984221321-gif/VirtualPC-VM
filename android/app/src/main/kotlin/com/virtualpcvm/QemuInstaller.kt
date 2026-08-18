@@ -1,6 +1,7 @@
 package com.virtualpcvm
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,21 +15,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 private const val TAG = "QemuInstaller"
-
-/**
- * Termux APT repository constants.
- * Packages are compiled for aarch64 (ARM64) — the host Android architecture.
- */
-private const val REPO_BASE   = "https://packages.termux.dev/apt/termux-main"
-private const val PACKAGES_URL = "$REPO_BASE/dists/stable/main/binary-aarch64/Packages"
-
-/** Termux QEMU package names → output binary name */
-private val QEMU_PACKAGES = mapOf(
-    "qemu-system-x86-64"  to "qemu-system-x86_64",
-    "qemu-system-aarch64" to "qemu-system-aarch64",
-    "qemu-system-arm"     to "qemu-system-arm",
-    "qemu-system-i386"    to "qemu-system-i386",
-)
+private const val REPO_BASE = "https://packages.termux.dev/apt/termux-main"
 
 data class InstallProgress(
     val step: String,
@@ -40,7 +27,24 @@ data class InstallProgress(
 
 typealias ProgressCallback = (InstallProgress) -> Unit
 
+/** Downloads only QEMU binaries that match the Android host ABI. */
 object QemuInstaller {
+
+    private val qemuPackages = listOf(
+        "qemu-system-x86-64" to "qemu-system-x86_64",
+        "qemu-system-aarch64" to "qemu-system-aarch64",
+        "qemu-system-arm" to "qemu-system-arm",
+        "qemu-system-i386" to "qemu-system-i386",
+    )
+
+    private fun termuxArch(): String = when (Build.SUPPORTED_ABIS.firstOrNull()) {
+        "arm64-v8a" -> "aarch64"
+        "armeabi-v7a" -> "arm"
+        else -> error("VirtualPC-VM supports ARM Android hosts only")
+    }
+
+    private fun packagesUrl(): String =
+        "$REPO_BASE/dists/stable/main/binary-${termuxArch()}/Packages"
 
     fun qemuDir(ctx: Context): File =
         File(ctx.filesDir, "qemu-bins").also { it.mkdirs() }
@@ -49,228 +53,130 @@ object QemuInstaller {
         File(qemuDir(ctx), binaryName).canExecute()
 
     fun anyInstalled(ctx: Context): Boolean =
-        QEMU_PACKAGES.values.any { isInstalled(ctx, it) }
+        qemuPackages.any { isInstalled(ctx, it.second) }
 
-    /* ══════════════════════════════════════════════════════════════
-       Main entry-point: download + extract every QEMU package
-       ══════════════════════════════════════════════════════════════ */
     suspend fun install(ctx: Context, onProgress: ProgressCallback) = withContext(Dispatchers.IO) {
         val dir = qemuDir(ctx)
         val tmpDir = File(ctx.cacheDir, "qemu-tmp").also { it.mkdirs() }
 
         try {
-            // Step 1 — fetch Packages index
-            onProgress(InstallProgress("Получение списка пакетов Termux...", 2,
-                "GET $PACKAGES_URL"))
-            val packagesText = fetchText(PACKAGES_URL)
-            onProgress(InstallProgress("Список пакетов получен", 5,
-                "Размер индекса: ${packagesText.length} байт"))
+            val indexUrl = packagesUrl()
+            onProgress(InstallProgress("Получение списка QEMU для ${termuxArch()}...", 2, "GET $indexUrl"))
+            val packagesText = fetchText(indexUrl)
 
-            val totalPackages = QEMU_PACKAGES.size
-            QEMU_PACKAGES.entries.forEachIndexed { idx, (pkgName, binName) ->
-
-                val basePercent = 5 + idx * (90 / totalPackages)
-
-                // already installed?
-                if (File(dir, binName).canExecute()) {
-                    onProgress(InstallProgress("$binName уже установлен, пропуск", basePercent + 5,
-                        "✓ $binName"))
+            qemuPackages.forEachIndexed { index, (pkgName, binName) ->
+                val base = 5 + index * 22
+                if (isInstalled(ctx, binName)) {
+                    onProgress(InstallProgress("$binName уже установлен", base + 18, "✓"))
                     return@forEachIndexed
                 }
 
-                // Step 2 — parse Packages to find Filename
-                onProgress(InstallProgress("Поиск пакета $pkgName...", basePercent + 2,
-                    "Парсинг индекса APT..."))
                 val filename = parsePackageFilename(packagesText, pkgName)
-                    ?: run {
-                        onProgress(InstallProgress("Пакет $pkgName не найден в репозитории",
-                            basePercent + 2, "⚠ Пропуск $pkgName", error = "not found"))
-                        return@forEachIndexed
-                    }
-
+                    ?: throw IllegalStateException("Пакет $pkgName отсутствует в Termux ${termuxArch()} repository")
                 val debUrl = "$REPO_BASE/$filename"
-                onProgress(InstallProgress("Загрузка $pkgName...", basePercent + 3,
-                    "↓ $debUrl"))
-
-                // Step 3 — download .deb
                 val debFile = File(tmpDir, "$pkgName.deb")
+
+                onProgress(InstallProgress("Загрузка $pkgName...", base + 2, debUrl))
                 downloadFile(debUrl, debFile) { downloaded, total ->
                     val pct = if (total > 0) (downloaded * 100 / total).toInt() else 0
-                    val mb  = downloaded / 1_048_576f
-                    onProgress(InstallProgress(
-                        "Загрузка $pkgName... $pct%",
-                        basePercent + 3 + (pct * (85 / totalPackages) / 100),
-                        "↓ ${"%.1f".format(mb)} МБ  ($pct%)"
-                    ))
+                    onProgress(InstallProgress("Загрузка $pkgName: $pct%", base + 2 + pct / 20))
                 }
-                onProgress(InstallProgress("Загрузка завершена, распаковка $pkgName...",
-                    basePercent + (85 / totalPackages), "✓ ${debFile.length() / 1024} КБ"))
 
-                // Step 4 — extract .deb → binary
-                val extracted = extractDebBinary(debFile, dir, binName)
+                if (!extractDebBinary(debFile, dir, binName)) {
+                    throw IllegalStateException("$binName не найден внутри $pkgName")
+                }
                 debFile.delete()
-
-                if (extracted) {
-                    File(dir, binName).setExecutable(true, false)
-                    onProgress(InstallProgress("chmod +x $binName", basePercent + (88 / totalPackages),
-                        "✓ chmod +x ${dir.absolutePath}/$binName"))
-                } else {
-                    onProgress(InstallProgress("Не удалось найти $binName в .deb",
-                        basePercent + (88 / totalPackages), "⚠ $binName не найден", error = "extract failed"))
-                }
+                File(dir, binName).setExecutable(true, false)
+                onProgress(InstallProgress("$binName установлен", base + 20, "✓"))
             }
 
-            // Step 5 — verify
-            onProgress(InstallProgress("Верификация установленных бинарников...", 97))
-            val results = StringBuilder()
-            QEMU_PACKAGES.values.forEach { bin ->
-                val f = File(dir, bin)
-                results.appendLine(if (f.canExecute()) "✓ $bin" else "✗ $bin (отсутствует)")
-            }
-            onProgress(InstallProgress("Установка завершена!", 100,
-                results.toString(), isDone = true))
-
+            val missing = qemuPackages.map { it.second }.filterNot { isInstalled(ctx, it) }
+            if (missing.isNotEmpty()) throw IllegalStateException("Не установлены: ${missing.joinToString()}")
+            onProgress(InstallProgress("QEMU установлен", 100, "host=${termuxArch()}", isDone = true))
         } catch (e: Exception) {
             Log.e(TAG, "Install error", e)
-            onProgress(InstallProgress("Ошибка установки", 0, e.message ?: "Неизвестная ошибка",
-                error = e.message))
+            onProgress(InstallProgress("Ошибка установки QEMU", 0, error = e.message))
         } finally {
             tmpDir.deleteRecursively()
         }
     }
 
-    /* ══════════════════════════════════════════════════════════════
-       Parse the APT Packages index to find Filename: for a package
-       ══════════════════════════════════════════════════════════════ */
-    private fun parsePackageFilename(packagesText: String, pkgName: String): String? {
-        var inBlock = false
-        for (line in packagesText.lineSequence()) {
+    private fun parsePackageFilename(text: String, packageName: String): String? {
+        var match = false
+        for (line in text.lineSequence()) {
             when {
-                line.startsWith("Package: ") -> inBlock = line.removePrefix("Package: ").trim() == pkgName
-                inBlock && line.startsWith("Filename: ") -> return line.removePrefix("Filename: ").trim()
-                line.isBlank() -> inBlock = false
+                line.startsWith("Package: ") -> match = line.substringAfter("Package: ").trim() == packageName
+                match && line.startsWith("Filename: ") -> return line.substringAfter("Filename: ").trim()
+                line.isBlank() -> match = false
             }
         }
         return null
     }
 
-    /* ══════════════════════════════════════════════════════════════
-       Download a URL to a file, reporting progress
-       ══════════════════════════════════════════════════════════════ */
-    private fun downloadFile(
-        urlStr: String,
-        dest: File,
-        onProgress: (downloaded: Long, total: Long) -> Unit,
-    ) {
-        var conn: HttpURLConnection? = null
+    private fun downloadFile(urlStr: String, dest: File, progress: (Long, Long) -> Unit) {
+        val conn = followRedirects(urlStr)
         try {
-            conn = followRedirects(urlStr)
             val total = conn.contentLengthLong
             BufferedInputStream(conn.inputStream).use { input ->
                 FileOutputStream(dest).use { output ->
-                    val buf = ByteArray(65_536)
-                    var downloaded = 0L
-                    var read: Int
-                    while (input.read(buf).also { read = it } != -1) {
-                        output.write(buf, 0, read)
-                        downloaded += read
-                        onProgress(downloaded, total)
+                    val buffer = ByteArray(65_536)
+                    var done = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        done += read
+                        progress(done, total)
                     }
                 }
             }
-        } finally {
-            conn?.disconnect()
-        }
+        } finally { conn.disconnect() }
     }
 
     private fun followRedirects(urlStr: String): HttpURLConnection {
-        var url = urlStr
+        var current = urlStr
         repeat(5) {
-            val conn = URL(url).openConnection() as HttpURLConnection
+            val conn = URL(current).openConnection() as HttpURLConnection
             conn.instanceFollowRedirects = false
             conn.connectTimeout = 15_000
-            conn.readTimeout    = 60_000
-            conn.setRequestProperty("User-Agent", "VirtualPCVM/1.0 (Android)")
-            val code = conn.responseCode
-            if (code in 301..308) {
-                url = conn.getHeaderField("Location") ?: throw Exception("Redirect без Location")
+            conn.readTimeout = 60_000
+            conn.setRequestProperty("User-Agent", "VirtualPC-VM/0.1")
+            if (conn.responseCode in 301..308) {
+                current = conn.getHeaderField("Location") ?: error("Redirect without Location")
                 conn.disconnect()
-            } else {
-                return conn
-            }
+            } else return conn
         }
-        throw Exception("Слишком много редиректов: $urlStr")
+        error("Too many redirects: $urlStr")
     }
 
-    private fun fetchText(urlStr: String): String {
-        val conn = followRedirects(urlStr)
-        return try {
-            conn.inputStream.bufferedReader().readText()
-        } finally {
-            conn.disconnect()
-        }
+    private fun fetchText(url: String): String = followRedirects(url).let { conn ->
+        try { conn.inputStream.bufferedReader().readText() } finally { conn.disconnect() }
     }
 
-    /* ══════════════════════════════════════════════════════════════
-       Extract the named binary from a .deb file (ar → data.tar.xz → binary)
-       .deb = ar archive containing:
-         debian-binary
-         control.tar.xz
-         data.tar.xz   ← we want this
-       ══════════════════════════════════════════════════════════════ */
-    private fun extractDebBinary(debFile: File, outDir: File, targetBinary: String): Boolean {
-        Log.d(TAG, "Extracting $debFile for binary: $targetBinary")
-        var found = false
-
+    private fun extractDebBinary(debFile: File, outDir: File, target: String): Boolean {
         ArArchiveInputStream(debFile.inputStream().buffered()).use { ar ->
-            var arEntry = ar.nextArEntry
-            while (arEntry != null) {
-                Log.d(TAG, "ar entry: ${arEntry.name}")
-                if (arEntry.name.startsWith("data.tar")) {
-                    found = extractTarBinary(ar, arEntry.name, outDir, targetBinary)
-                    break
-                }
-                arEntry = ar.nextArEntry
-            }
-        }
-
-        return found
-    }
-
-    private fun extractTarBinary(
-        arStream: ArArchiveInputStream,
-        entryName: String,
-        outDir: File,
-        targetBinary: String,
-    ): Boolean {
-        val decompressed = when {
-            entryName.endsWith(".xz")  -> XZCompressorInputStream(arStream)
-            entryName.endsWith(".gz")  -> java.util.zip.GZIPInputStream(arStream)
-            entryName.endsWith(".zst") -> throw UnsupportedOperationException("zstd не поддерживается")
-            else                       -> arStream // plain tar
-        }
-
-        TarArchiveInputStream(decompressed).use { tar ->
-            var entry = tar.nextTarEntry
+            var entry = ar.nextArEntry
             while (entry != null) {
-                // Termux stores binaries under ./data/data/com.termux/files/usr/bin/
-                // or ./usr/bin/   — match by filename
-                val name = File(entry.name).name
-                if (!entry.isDirectory && (name == targetBinary || name.startsWith("qemu-system"))) {
-                    val dest = File(outDir, name)
-                    Log.i(TAG, "Extracting $name → $dest")
-                    dest.outputStream().use { out ->
-                        val buf = ByteArray(65_536)
-                        var read: Int
-                        while (tar.read(buf).also { read = it } != -1) {
-                            out.write(buf, 0, read)
+                if (entry.name.startsWith("data.tar")) {
+                    val stream = when {
+                        entry.name.endsWith(".xz") -> XZCompressorInputStream(ar)
+                        entry.name.endsWith(".gz") -> java.util.zip.GZIPInputStream(ar)
+                        else -> ar
+                    }
+                    TarArchiveInputStream(stream).use { tar ->
+                        var tarEntry = tar.nextTarEntry
+                        while (tarEntry != null) {
+                            if (!tarEntry.isDirectory && File(tarEntry.name).name == target) {
+                                File(outDir, target).outputStream().use { output -> tar.copyTo(output) }
+                                return true
+                            }
+                            tarEntry = tar.nextTarEntry
                         }
                     }
-                    if (name == targetBinary) return true
                 }
-                entry = tar.nextTarEntry
+                entry = ar.nextArEntry
             }
         }
-        return File(outDir, targetBinary).exists()
+        return false
     }
 }
