@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'TERMUX_PKG_VERSION="1:11.0.3"' x11-packages/qemu-system-x86-64/build.sh
-          grep -q 'qemu-11.0.3.tar.xz' x11-packages/qemu-system-x86-64/build.sh
+          grep -q 'TERMUX_PKG_SRCURL="https://download.qemu.org/qemu-${TERMUX_PKG_VERSION:2}.tar.xz"' x11-packages/qemu-system-x86-64/build.sh
           grep -q 'x86_64-softmmu' x11-packages/qemu-system-x86-64/build.sh
           echo 'QEMU 11.0.3 / x86_64-softmmu recipe confirmed.'
 
