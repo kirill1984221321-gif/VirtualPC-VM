@@ -99,7 +99,7 @@ public final class VMController {
     }
 
     public void stop(Listener listener) {
-        QemuProcess qemu;
+        final QemuProcess qemu;
         synchronized (lock) {
             ++generation;
             qemu = process;
@@ -111,28 +111,38 @@ public final class VMController {
             state = State.STOPPING;
         }
         notifyState(listener);
-        qemu.stop();
-        synchronized (lock) {
-            if (process == qemu) process = null;
-            state = State.STOPPED;
-        }
-        notifyState(listener);
+
+        Thread worker = new Thread(() -> {
+            qemu.stop();
+            synchronized (lock) {
+                if (process == qemu) process = null;
+                if (state == State.STOPPING) state = State.STOPPED;
+            }
+            notifyState(listener);
+        }, "vm-controller-stop");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     public void forceStop(Listener listener) {
-        QemuProcess qemu;
+        final QemuProcess qemu;
         synchronized (lock) {
             ++generation;
             qemu = process;
             state = State.STOPPING;
         }
         notifyState(listener);
-        if (qemu != null) qemu.forceStop();
-        synchronized (lock) {
-            if (process == qemu) process = null;
-            state = State.STOPPED;
-        }
-        notifyState(listener);
+
+        Thread worker = new Thread(() -> {
+            if (qemu != null) qemu.forceStop();
+            synchronized (lock) {
+                if (process == qemu) process = null;
+                if (state == State.STOPPING) state = State.STOPPED;
+            }
+            notifyState(listener);
+        }, "vm-controller-force-stop");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     public boolean isRunning() {
