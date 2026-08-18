@@ -119,7 +119,7 @@ jobs:
         echo "No legacy vectras.jks was generated or committed"
 
     - name: Run JVM unit tests
-      run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+      run: ./gradlew test --no-daemon --stacktrace
 
     - name: Verify embedded QEMU assets in Debug APK
       run: |
