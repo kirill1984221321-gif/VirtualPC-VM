@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,6 +23,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -28,8 +37,13 @@ jobs:
       - name: Assemble debug APK
         run: gradle -p android assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Assemble release APK
+        run: gradle -p android assembleRelease --stacktrace
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: VirtualPC-VM-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: VirtualPC-VM-apks
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
