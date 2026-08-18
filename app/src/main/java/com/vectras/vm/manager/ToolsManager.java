@@ -11,7 +11,7 @@ import androidx.core.app.NotificationManagerCompat;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.R;
 import com.vectras.vm.VectrasApp;
-import com.vectras.vm.legacy.network.LegacyNetworkUtils;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.setupwizard.SetupFeatureCore;
 import com.vectras.vm.utils.DialogUtils;
 import com.vectras.vm.utils.FileUtils;
@@ -63,7 +63,7 @@ public class ToolsManager {
                             builder.setProgress(100, 0, false);
                             manager.notify(notificationId, builder.build());
 
-                            LegacyNetworkUtils.download(AppConfig.virtIOWinUrl, AppConfig.basefiledir + "virtio-win.bin", new LegacyNetworkUtils.DownloadCallback() {
+                            AppNetworkUtils.download(AppConfig.virtIOWinUrl, AppConfig.basefiledir + "virtio-win.bin", new AppNetworkUtils.DownloadCallback() {
                                 @Override
                                 public void onProgress(int percent) {
                                     builder.setProgress(100, percent, false)
