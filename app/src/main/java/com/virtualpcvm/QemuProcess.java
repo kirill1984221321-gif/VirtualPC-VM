@@ -4,6 +4,7 @@ import android.os.Build;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -61,8 +62,12 @@ public final class QemuProcess {
 
         Thread waiter = new Thread(() -> {
             int code;
-            try { code = launched.waitFor(); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); code = -1; }
+            try {
+                code = launched.waitFor();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                code = -1;
+            }
             synchronized (QemuProcess.this) {
                 exitCode = code;
                 if (process == launched) process = null;
@@ -81,20 +86,19 @@ public final class QemuProcess {
         current.destroy();
         try {
             if (Build.VERSION.SDK_INT >= 26) {
-                if (!current.waitFor(2, TimeUnit.SECONDS)) current.destroyForcibly();
+                if (!current.waitFor(2, TimeUnit.SECONDS)) destroyForciblyCompat(current);
             } else {
                 Thread.sleep(2000L);
-                if (isAlive(current)) current.destroyForcibly();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            current.destroyForcibly();
+            destroyForciblyCompat(current);
         }
     }
 
     public synchronized void forceStop() {
         Process current = process;
-        if (current != null) current.destroyForcibly();
+        if (current != null) destroyForciblyCompat(current);
     }
 
     public boolean isRunning() {
@@ -111,12 +115,21 @@ public final class QemuProcess {
         return process.pid();
     }
 
+    private static void destroyForciblyCompat(Process process) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            process.destroyForcibly();
+        } else {
+            // destroyForcibly() does not exist on API < 26.
+            process.destroy();
+        }
+    }
+
     private static boolean isAlive(Process process) {
         try { process.exitValue(); return false; }
         catch (IllegalThreadStateException e) { return true; }
     }
 
-    private Thread stream(java.io.InputStream stream, boolean isStdout, Listener listener) {
+    private Thread stream(InputStream stream, boolean isStdout, Listener listener) {
         return new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                 String line;
