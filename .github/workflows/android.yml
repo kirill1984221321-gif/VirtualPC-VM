@@ -49,25 +49,6 @@ jobs:
           echo "google-services.json not configured; legacy Firebase plugins will remain disabled"
         fi
 
-    - name: Ensure CI signing keystore exists
-      run: |
-        set -euo pipefail
-        if [[ ! -f vectras.jks ]]; then
-          echo "vectras.jks is absent; generating an ephemeral CI signing keystore"
-          keytool -genkeypair -noprompt \
-            -keystore vectras.jks \
-            -storepass 856856 \
-            -keypass 856856 \
-            -alias vectras \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=VirtualPC-VM CI, OU=CI, O=VirtualPC-VM, L=CI, ST=CI, C=US"
-        fi
-        test -s vectras.jks
-        keytool -list -keystore vectras.jks -storepass 856856 -alias vectras >/dev/null
-        echo "Signing keystore is ready"
-
     - name: Send notification to Telegram
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -124,9 +105,18 @@ jobs:
     - name: Inspect app dependencies
       run: ./gradlew :app:dependencies --configuration debugRuntimeClasspath --no-daemon --stacktrace
 
-    - name: Build Debug APK and legacy loader modules
+    - name: Build Debug APK and legacy loader stub
       run: |
-        ./gradlew :shell-loader:stub:assembleDebug :shell-loader:assembleDebug assembleDebug --no-daemon --stacktrace
+        ./gradlew :shell-loader:stub:assembleDebug assembleDebug --no-daemon --stacktrace
+
+    - name: Assert no legacy keystore was generated
+      run: |
+        set -euo pipefail
+        if [[ -e vectras.jks ]]; then
+          echo "Unexpected vectras.jks found in CI workspace"
+          exit 1
+        fi
+        echo "No legacy vectras.jks was generated or committed"
 
     - name: Run JVM unit tests
       run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
