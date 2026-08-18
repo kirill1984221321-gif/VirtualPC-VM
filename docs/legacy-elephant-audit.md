@@ -10,11 +10,11 @@ The historical `com.anbui.elephant.interaction.Interaction` class was not part o
 
 The historical interaction model and helper classes have therefore been removed from the branch. `RomInfo` no longer owns an `Interaction` instance; the optional view/like widgets are hidden instead of being replaced by fake values. This keeps ROM information and import behavior intact without coupling the VM app to the old social service.
 
-`com.anbui.elephant.log.LogPrinter` is not present in the current source tree. No replacement logging dependency is required for VM runtime.
+`com.anbui.elephant.log.LogPrinter`, `Interaction`, `DataInteraction`, and `InteractionUtils` are not present in the current production source.
 
-The old network helper was also separated from the Elephant package. `com.vectras.vm.legacy.network.LegacyNetworkUtils` is a small project-owned adapter used only by legacy Store/Updater/setup code. It performs real HTTP GET/POST/download operations and does not return fake responses. The current `com.anbui.elephant.retrofit2utils.Retrofit2Utils` class is only a compatibility facade delegating to that project-owned implementation; it is not the original Elephant library and contains no fake implementation.
+Optional Store/Updater/setup networking is now implemented by the project-owned `com.vectras.vm.network.AppNetworkUtils`, which performs real HTTP GET/POST/download operations asynchronously. Two remaining legacy Vectras callers (`MainActivity` and `SetupWizard2Activity`) still use a small, real `com.anbui.elephant.retrofit2utils.Retrofit2Utils` compatibility adapter. That adapter contains no Elephant implementation, no fake responses, and no external Elephant dependency; it only forwards calls to `AppNetworkUtils`. New VirtualPC-VM/QEMU code must not depend on it.
 
-The QEMU runtime (`com.virtualpcvm`) does not depend on Elephant, Store, Updater, or the compatibility facade. Its ARM64 QEMU assets remain embedded under `app/src/main/assets/qemu/`.
+The QEMU runtime (`com.virtualpcvm`) does not depend on Elephant, Store, Updater, or the compatibility adapter. Its ARM64 QEMU assets remain embedded under `app/src/main/assets/qemu/`.
 
 ## Historical origin
 
@@ -24,11 +24,11 @@ The interaction stack was explicitly removed in the following branch history:
 - `c42a9637558ba9188164bf11267fc14cf5691b1d` — removed `DataInteraction`.
 - `4dfa4597cd9253343269303417d60e2a517e6782` — removed `InteractionUtils`.
 - `1c27dcc9cfa1b83646a821ffbb6a99479ef2a512` — removed the empty interaction package marker.
-- `65d341aae5c0b16d9a566c12fbc9d0dfe156240a` — added the explicit compatibility facade for the remaining legacy imports.
+- `65d341aae5c0b16d9a566c12fbc9d0dfe156240a` — introduced the explicit compatibility boundary for the remaining legacy callers.
+- `bfc7e8b5ac51b671f951c06278032a905368f27b` — removed the old Retrofit catalog entries.
+- `7e16e1fae6b349bd888c00cfb5a6eba4d66a1b86` — hardened the application-owned HTTP body reader for Android compatibility.
 
-`UpdaterActivity`, `RomStoreFragment`, `SoftwareStoreFragment`, and `ToolsManager` already use `LegacyNetworkUtils` directly. The remaining facade is retained only as a real compatibility boundary for legacy callers that have not yet been migrated; it does not restore the Elephant implementation.
-
-## Architectural rule
+## Architectural boundary
 
 The new VM path is intentionally kept separate:
 
