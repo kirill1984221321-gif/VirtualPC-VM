@@ -25,7 +25,6 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.PreferenceManager;
 
-import com.anbui.elephant.retrofit2utils.Retrofit2Utils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.termux.app.TermuxActivity;
@@ -39,6 +38,7 @@ import com.vectras.vm.databinding.ActivitySetupWizard2Binding;
 import com.vectras.vm.databinding.SetupQemuDoneBinding;
 import com.vectras.vm.databinding.SimpleLayoutListViewWithCheckBinding;
 import com.vectras.vm.main.MainActivity;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.utils.DeviceUtils;
 import com.vectras.vm.utils.DialogUtils;
 import com.vectras.vm.utils.FileUtils;
@@ -408,7 +408,7 @@ public class SetupWizard2Activity extends AppCompatActivity {
     private void getDataForStandardSetup() {
         uiController(STEP_GETTING_DATA);
 
-        Retrofit2Utils.get(AppConfig.bootstrapfileslink, ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.bootstrapfileslink, ((isSuccess, body, status, error) -> {
             if (isSuccess) {
                 if (JSONUtils.isValidFromString(body)) {
                     HashMap<String, Object> mmap;
@@ -563,7 +563,7 @@ public class SetupWizard2Activity extends AppCompatActivity {
                         "-b", "/data",
                         "-w", "/root",
                         "/bin/sh",
-                        "--login"// The shell to execute inside PRoot
+                        "--login"// The shell to execute inside the PRoot environment
                 };
 
                 processBuilder.command(prootCommand);
