@@ -7,10 +7,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-/** Independent VM configuration schema. It contains no Vectras/Termux types. */
+/** Independent VM configuration schema. */
 public final class VMConfig {
     public static final int CURRENT_SCHEMA_VERSION = 1;
-
     @SerializedName("schemaVersion") public int schemaVersion = CURRENT_SCHEMA_VERSION;
     @SerializedName("id") public String id = UUID.randomUUID().toString();
     @SerializedName("name") public String name = "Новая виртуальная машина";
@@ -30,38 +29,26 @@ public final class VMConfig {
     @SerializedName("extraArguments") public List<String> extraArguments = new ArrayList<>();
 
     public VMConfig copy() {
-        VMConfig copy = new VMConfig();
-        copy.schemaVersion = schemaVersion;
-        copy.id = id;
-        copy.name = name;
-        copy.osType = osType;
-        copy.machine = machine;
-        copy.cpu = cpu;
-        copy.cpuCount = cpuCount;
-        copy.ramMb = ramMb;
-        copy.hdd = hdd;
-        copy.iso = iso;
-        copy.cdrom = cdrom;
-        copy.bootOrder = bootOrder;
-        copy.display = display;
-        copy.vncPort = vncPort;
-        copy.video = video;
-        copy.network = network;
-        copy.extraArguments = new ArrayList<>(extraArguments == null ? Collections.emptyList() : extraArguments);
-        return copy;
+        VMConfig c = new VMConfig();
+        c.schemaVersion = schemaVersion; c.id = id; c.name = name; c.osType = osType;
+        c.machine = machine; c.cpu = cpu; c.cpuCount = cpuCount; c.ramMb = ramMb;
+        c.hdd = hdd; c.iso = iso; c.cdrom = cdrom; c.bootOrder = bootOrder;
+        c.display = display; c.vncPort = vncPort; c.video = video; c.network = network;
+        c.extraArguments = new ArrayList<>(extraArguments == null ? Collections.<String>emptyList() : extraArguments);
+        return c;
     }
 
     public void validate() {
-        if (id == null || id.isBlank()) throw new IllegalArgumentException("VM id is empty");
-        if (name == null || name.isBlank()) throw new IllegalArgumentException("VM name is empty");
-        if (machine == null || machine.isBlank()) throw new IllegalArgumentException("Machine is empty");
-        if (cpu == null || cpu.isBlank()) throw new IllegalArgumentException("CPU is empty");
+        if (isBlank(id)) throw new IllegalArgumentException("VM id is empty");
+        if (isBlank(name)) throw new IllegalArgumentException("VM name is empty");
+        if (isBlank(machine)) throw new IllegalArgumentException("Machine is empty");
+        if (isBlank(cpu)) throw new IllegalArgumentException("CPU is empty");
         if (cpuCount < 1 || cpuCount > 64) throw new IllegalArgumentException("CPU count must be 1..64");
         if (ramMb < 128 || ramMb > 262144) throw new IllegalArgumentException("RAM must be 128..262144 MB");
         if (vncPort < 5900 || vncPort > 65535) throw new IllegalArgumentException("Invalid VNC port");
         if (extraArguments == null) extraArguments = new ArrayList<>();
-        for (String arg : extraArguments) {
-            if (arg == null || arg.contains("\u0000")) throw new IllegalArgumentException("Invalid extra QEMU argument");
-        }
+        for (String arg : extraArguments) if (arg == null || arg.indexOf('\u0000') >= 0) throw new IllegalArgumentException("Invalid extra QEMU argument");
     }
+
+    private static boolean isBlank(String value) { return value == null || value.trim().isEmpty(); }
 }

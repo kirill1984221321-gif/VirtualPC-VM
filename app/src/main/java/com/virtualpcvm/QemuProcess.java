@@ -1,5 +1,7 @@
 package com.virtualpcvm;
 
+import android.os.Build;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -21,9 +23,7 @@ public final class QemuProcess {
     private final StringBuilder stdout = new StringBuilder();
     private final StringBuilder stderr = new StringBuilder();
 
-    public QemuProcess(QemuRuntime runtime) {
-        this.runtime = runtime;
-    }
+    public QemuProcess(QemuRuntime runtime) { this.runtime = runtime; }
 
     public synchronized void start(List<String> command, Listener listener) throws IOException {
         if (isRunning()) throw new IllegalStateException("QEMU process is already running");
@@ -31,31 +31,23 @@ public final class QemuProcess {
         if (!command.get(0).equals(runtime.getBinary().getAbsolutePath())) {
             throw new IllegalArgumentException("QEMU command must use the embedded runtime executable");
         }
-
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(runtime.getRuntimeDir());
-        // Explicitly remove any inherited Termux-style loader environment.
         builder.environment().remove("LD_LIBRARY_PATH");
         builder.environment().remove("LD_PRELOAD");
         builder.redirectInput(ProcessBuilder.Redirect.PIPE);
         process = builder.start();
         exitCode = Integer.MIN_VALUE;
-
         Thread outThread = stream(process.getInputStream(), true, listener);
         Thread errThread = stream(process.getErrorStream(), false, listener);
         outThread.setDaemon(true);
         errThread.setDaemon(true);
         outThread.start();
         errThread.start();
-
         Thread waiter = new Thread(() -> {
             int code;
-            try {
-                code = process.waitFor();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                code = -1;
-            }
+            try { code = process.waitFor(); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); code = -1; }
             exitCode = code;
             if (listener != null) listener.onExit(code);
         }, "qemu-waiter");
@@ -68,7 +60,12 @@ public final class QemuProcess {
         if (current == null) return;
         current.destroy();
         try {
-            if (!current.waitFor(2, TimeUnit.SECONDS)) current.destroyForcibly();
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (!current.waitFor(2, TimeUnit.SECONDS)) current.destroyForcibly();
+            } else {
+                Thread.sleep(2000L);
+                if (isAlive(current)) current.destroyForcibly();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             current.destroyForcibly();
@@ -82,30 +79,21 @@ public final class QemuProcess {
 
     public boolean isRunning() {
         Process current = process;
-        if (current == null) return false;
-        try {
-            current.exitValue();
-            return false;
-        } catch (IllegalThreadStateException e) {
-            return true;
-        }
+        return current != null && isAlive(current);
     }
 
-    public int getExitCode() {
-        return exitCode;
-    }
-
-    public synchronized String getStdout() {
-        return stdout.toString();
-    }
-
-    public synchronized String getStderr() {
-        return stderr.toString();
-    }
+    public int getExitCode() { return exitCode; }
+    public synchronized String getStdout() { return stdout.toString(); }
+    public synchronized String getStderr() { return stderr.toString(); }
 
     public long getPid() {
-        Process current = process;
-        return current == null ? -1L : current.pid();
+        if (Build.VERSION.SDK_INT < 26 || process == null) return -1L;
+        return process.pid();
+    }
+
+    private static boolean isAlive(Process process) {
+        try { process.exitValue(); return false; }
+        catch (IllegalThreadStateException e) { return true; }
     }
 
     private Thread stream(java.io.InputStream stream, boolean isStdout, Listener listener) {
@@ -122,9 +110,7 @@ public final class QemuProcess {
                         else listener.onStderr(line);
                     }
                 }
-            } catch (IOException ignored) {
-                // Process shutdown can close the stream while this reader is blocked.
-            }
+            } catch (IOException ignored) { }
         }, isStdout ? "qemu-stdout" : "qemu-stderr");
     }
 }

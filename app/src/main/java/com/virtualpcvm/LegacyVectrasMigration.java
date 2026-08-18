@@ -3,33 +3,34 @@ package com.virtualpcvm;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.ArrayList;
 
-/** Optional, isolated bridge for old Vectras vm JSON. The new backend does not depend on Vectras classes. */
+/** Optional bridge for old Vectras vm JSON. New backend never imports Vectras classes. */
 public final class LegacyVectrasMigration {
     private LegacyVectrasMigration() {}
 
     public static VMConfig parse(File legacyJson) throws IOException {
-        String json = Files.readString(legacyJson.toPath(), StandardCharsets.UTF_8);
-        try {
-            JsonObject old = JsonParser.parseString(json).getAsJsonObject();
-            VMConfig config = new VMConfig();
-            config.name = string(old, "imgName", config.name);
-            config.hdd = string(old, "imgPath", "");
-            config.iso = string(old, "imgCdrom", "");
-            config.osType = string(old, "imgArch", "Other");
-            String extra = string(old, "imgExtra", "").trim();
-            if (!extra.isEmpty()) {
-                for (String token : extra.split("\\s+")) if (!token.isBlank()) config.extraArguments.add(token);
+        try (BufferedReader reader = new BufferedReader(new FileReader(legacyJson))) {
+            StringBuilder json = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) json.append(line).append('\n');
+            try {
+                JsonObject old = JsonParser.parseString(json.toString()).getAsJsonObject();
+                VMConfig config = new VMConfig();
+                config.name = string(old, "imgName", config.name);
+                config.hdd = string(old, "imgPath", "");
+                config.iso = string(old, "imgCdrom", "");
+                config.osType = string(old, "imgArch", "Other");
+                String extra = string(old, "imgExtra", "").trim();
+                if (!extra.isEmpty()) for (String token : extra.split("\\s+")) if (!token.trim().isEmpty()) config.extraArguments.add(token);
+                config.validate();
+                return config;
+            } catch (RuntimeException e) {
+                throw new IOException("Cannot migrate legacy Vectras VM config", e);
             }
-            config.validate();
-            return config;
-        } catch (RuntimeException e) {
-            throw new IOException("Cannot migrate legacy Vectras VM config", e);
         }
     }
 
