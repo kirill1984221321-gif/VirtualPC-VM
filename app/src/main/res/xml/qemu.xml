@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory>
+        <SwitchPreferenceCompat
+            android:key="customMemory"
+            android:defaultValue="false"
+            android:title="@string/custom_memory"
+            app:icon="@drawable/round_build_24" />
+        <EditTextPreference
+            android:key="memory"
+            android:defaultValue="512"
+            android:inputType="number"
+            android:title="@string/memory_capacity_mb"
+            app:useSimpleSummaryProvider="true" />
+        <SwitchPreferenceCompat
+            android:key="autoCreateDisk"
+            android:defaultValue="false"
+            android:summary="@string/with_size_is_128GB"
+            android:title="@string/auto_create_new_hard_drive_when_creating_new_vm"
+            app:icon="@drawable/round_add_24" />
+    </PreferenceCategory>
+</PreferenceScreen>
