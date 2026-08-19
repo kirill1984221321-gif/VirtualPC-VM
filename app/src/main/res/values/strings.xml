@@ -12,7 +12,7 @@
 
     <string name="qemu_console_head" translatable="false">compat_monitor1 console\nQemu monitor - type \'help\' for more information\n(qemu)</string>
 
-    <string name="desktopInstructions">To use External Mouse:\n\tDisable Mouse Acceleration inside the Guest OS.\n\t\tFor DSL use command: xset m 1\n"\t\tFor Other OSes disable \"Enhance pointer Precision\" or choose Mouse \"usb-tablet\" from Vectras main options.\n\tPlug in or Pair your USB/Bluetooth Mouse and press OK\n\tMove your mouse pointer to all desktop sides to calibrate.\n"</string>
+    <string name="desktopInstructions">To use External Mouse:\n\tDisable Mouse Acceleration inside the Guest OS.\n\t\tFor DSL use command: xset m 1\n\t\tFor Other OSes disable \"Enhance pointer Precision\" or choose Mouse \"usb-tablet\" from Vectras main options.\n\tPlug in or Pair your USB/Bluetooth Mouse and press OK\n\tMove your mouse pointer to all desktop sides to calibrate.\n</string>
 
     <string name="navigation_drawer_open">Drawer open</string>
     <string name="navigation_drawer_close">Drawer close</string>
@@ -552,7 +552,7 @@
     <string name="taking_a_screenshot">Taking a screenshot…</string>
     <string name="this_vm_is_already_running">This VM is already running.</string>
     <string name="the_server_is_running">The server is running</string>
-    <string name="host_shared_folder_format_content">Access this link on the virtual machine to access the Download folder on your device:\n\n%s\n\nYou can also send files from the virtual machine to the Download folder on your device, here\'s an example using curl:\n\n%s</string>
+    <string name="host_shared_folder_format_content">Access this link on the virtual machine to access the Download folder on your device:\n\n%1$s\n\nYou can also send files from the virtual machine to the Download folder on your device, here\'s an example using curl:\n\n%2$s</string>
     <string name="host_shared_folder_error_content">An error occurred while starting the server. Please try again later.</string>
     <string name="copy_link">Copy link</string>
     <string name="copy_upload_command">Copy upload command</string>
@@ -565,7 +565,6 @@
     <string name="locked_and_cannot_be_changed_content">The device is locked and cannot be changed right now. Please try again later. You can try eject it and then trying to change it again.</string>
     <string name="manage">Manage</string>
     <string name="connect">Connect</string>
-
 
     <!--======================TERMUX STRINGS====================-->
     <string name="application_name" translatable="false">Vterm</string>

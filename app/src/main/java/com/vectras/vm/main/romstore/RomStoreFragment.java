@@ -13,12 +13,12 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.anbui.elephant.retrofit2utils.Retrofit2Utils;
 import com.google.android.material.transition.MaterialFadeThrough;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.databinding.FragmentHomeRomStoreBinding;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.main.core.SharedData;
 
 import java.lang.reflect.Type;
@@ -51,7 +51,6 @@ public class RomStoreFragment extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
         binding = FragmentHomeRomStoreBinding.inflate(inflater, container, false);
         return binding.getRoot();
     }
@@ -95,7 +94,7 @@ public class RomStoreFragment extends Fragment {
         romStoreCallToHomeListener.updateSearchStatus(false);
         binding.linearload.setVisibility(View.VISIBLE);
 
-        Retrofit2Utils.get(AppConfig.vectrasRaw + "vroms-store.json", ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.vectrasRaw + "vroms-store.json", ((isSuccess, body, status, error) -> {
             binding.linearload.setVisibility(View.GONE);
             if (isSuccess) {
                 if (!body.isEmpty())

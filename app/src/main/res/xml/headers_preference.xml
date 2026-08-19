@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <Preference android:key="app" android:title="System" android:fragment="com.vectras.qemu.MainSettingsManager$AppPreferencesFragment" />
+    <Preference android:key="userinterface" android:title="Theme" />
+    <Preference android:key="qemu" android:fragment="com.vectras.qemu.MainSettingsManager$QemuPreferencesFragment" android:title="QEMU" />
+    <Preference android:key="vnc" android:title="VNC">
+        <intent android:targetPackage="com.vectras.vm" android:targetClass="com.vectras.vm.settings.VNCSettingsActivity" />
+    </Preference>
+</PreferenceScreen>

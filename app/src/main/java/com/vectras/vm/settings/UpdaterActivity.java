@@ -14,18 +14,17 @@ import android.view.View;
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.anbui.elephant.retrofit2utils.Retrofit2Utils;
 import com.vectras.qemu.MainSettingsManager;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.R;
 import com.vectras.vm.databinding.ActivityUpdaterBinding;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.utils.DialogUtils;
 import com.vectras.vm.utils.PackageUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Locale;
 import java.util.Objects;
 
 public class UpdaterActivity extends AppCompatActivity {
@@ -82,7 +81,7 @@ public class UpdaterActivity extends AppCompatActivity {
         int versionCode = PackageUtils.getThisVersionCode(getApplicationContext());
         String versionName = PackageUtils.getThisVersionName(getApplicationContext());
 
-        Retrofit2Utils.get(AppConfig.vectrasRaw + "UpdateConfig.json", ((isSuccess, body, status, error) -> {
+        AppNetworkUtils.get(AppConfig.vectrasRaw + "UpdateConfig.json", ((isSuccess, body, status, error) -> {
             if (isSuccess) {
                 binding.lpiProgressbar.setVisibility(View.GONE);
                 binding.lnBottombar.setVisibility(View.VISIBLE);
@@ -90,20 +89,17 @@ public class UpdaterActivity extends AppCompatActivity {
                 if (!body.isEmpty()) {
                     try {
                         final JSONObject obj = new JSONObject(body);
-//                        String versionNameonUpdate;
                         int versionCodeonUpdate;
                         String whatsnew;
                         String size;
                         String url;
 
                         if (MainSettingsManager.getcheckforupdatesfromthebetachannel(UpdaterActivity.this)) {
-//                            versionNameonUpdate = obj.getString("versionNameBeta");
                             versionCodeonUpdate = obj.getInt("versionCodeBeta");
                             whatsnew = obj.getString("MessageBeta");
                             size = obj.getString("sizeBeta");
                             url = obj.getString("urlBeta");
                         } else {
-//                            versionNameonUpdate = obj.getString("versionName");
                             versionCodeonUpdate = obj.getInt("versionCode");
                             whatsnew = obj.getString("Message");
                             size = obj.getString("size");
@@ -112,7 +108,7 @@ public class UpdaterActivity extends AppCompatActivity {
 
                         if (versionCode < versionCodeonUpdate) {
                             binding.collapsingToolbarLayout.setTitle(getText(R.string.new_update_available));
-                            binding.collapsingToolbarLayout.setSubtitle(getString(R.string.whats_new));
+                            binding.collapsingToolbarLayout.setSubtitle(getText(R.string.whats_new));
                             binding.mcvWhatsnew.setVisibility(View.VISIBLE);
                             binding.tvWhatsnewcontent.setMovementMethod(LinkMovementMethod.getInstance());
                             binding.tvWhatsnewcontent.setText(Html.fromHtml(whatsnew + "<br><br>Update size:<br>" + size));

@@ -1,0 +1,34 @@
+plugins {
+    id('com.android.library')
+}
+
+android {
+    namespace 'com.termux.x11.stub'
+    buildToolsVersion "36.1.0"
+    compileSdkVersion 36
+    defaultConfig {
+        minSdkVersion 24
+    }
+    buildFeatures {
+        buildConfig false
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    lint {
+        targetSdk 28
+    }
+    testOptions {
+        targetSdk 28
+    }
+}
+
+dependencies {
+    implementation libs.androidx.annotation
+}

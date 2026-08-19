@@ -1,0 +1,176 @@
+package com.virtualpcvm;
+
+import android.os.Build;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+/** Process boundary for the embedded QEMU executable. */
+public final class QemuProcess {
+    public interface Listener {
+        void onStdout(String line);
+        void onStderr(String line);
+        void onExit(int code);
+    }
+
+    private static final int MAX_LOG_CHARS = 262_144;
+    private static final long STOP_TIMEOUT_MS = 2_000L;
+    private static final long STOP_POLL_MS = 25L;
+
+    private final QemuRuntime runtime;
+    private volatile Process process;
+    private volatile int exitCode = Integer.MIN_VALUE;
+    private final StringBuilder stdout = new StringBuilder();
+    private final StringBuilder stderr = new StringBuilder();
+
+    public QemuProcess(QemuRuntime runtime) { this.runtime = runtime; }
+
+    public synchronized void start(List<String> command, Listener listener) throws IOException {
+        if (isRunning()) throw new IllegalStateException("QEMU process is already running");
+        if (command == null || command.isEmpty()) throw new IllegalArgumentException("Empty QEMU command");
+        if (!command.get(0).equals(runtime.getBinary().getAbsolutePath())) {
+            throw new IllegalArgumentException("QEMU command must use the embedded runtime executable");
+        }
+        if (!runtime.isValid()) throw new IOException("Embedded QEMU runtime is invalid");
+
+        stdout.setLength(0);
+        stderr.setLength(0);
+        exitCode = Integer.MIN_VALUE;
+
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(runtime.getRuntimeDir());
+        // Keep execution isolated from Termux/system QEMU. The bundled shared libraries are explicit.
+        builder.environment().remove("LD_PRELOAD");
+        builder.environment().put("LD_LIBRARY_PATH", runtime.getLibraryDir().getAbsolutePath());
+        builder.environment().remove("QEMU_LD_PREFIX");
+        builder.environment().remove("TERMUX_VERSION");
+        builder.environment().remove("TERMUX_APK_RELEASE");
+        builder.redirectInput(ProcessBuilder.Redirect.PIPE);
+
+        Process launched = builder.start();
+        process = launched;
+
+        Thread outThread = stream(launched.getInputStream(), true, listener);
+        Thread errThread = stream(launched.getErrorStream(), false, listener);
+        outThread.setDaemon(true);
+        errThread.setDaemon(true);
+        outThread.start();
+        errThread.start();
+
+        Thread waiter = new Thread(() -> {
+            int code;
+            try {
+                code = launched.waitFor();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                code = -1;
+            }
+            synchronized (QemuProcess.this) {
+                exitCode = code;
+                if (process == launched) process = null;
+            }
+            if (listener != null) {
+                try { listener.onExit(code); } catch (Throwable ignored) { }
+            }
+        }, "qemu-waiter");
+        waiter.setDaemon(true);
+        waiter.start();
+    }
+
+    public synchronized void stop() {
+        Process current = process;
+        if (current == null) return;
+        current.destroy();
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (!current.waitFor(STOP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    destroyForciblyCompat(current);
+                    current.waitFor(STOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                }
+            } else {
+                long deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS;
+                while (isAlive(current) && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(STOP_POLL_MS);
+                }
+                if (isAlive(current)) destroyForciblyCompat(current);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            destroyForciblyCompat(current);
+        }
+    }
+
+    public synchronized void forceStop() {
+        Process current = process;
+        if (current != null) destroyForciblyCompat(current);
+    }
+
+    public boolean isRunning() {
+        Process current = process;
+        return current != null && isAlive(current);
+    }
+
+    public int getExitCode() { return exitCode; }
+    public synchronized String getStdout() { return stdout.toString(); }
+    public synchronized String getStderr() { return stderr.toString(); }
+
+    /**
+     * Return the Linux process id when the Android runtime exposes Process.pid().
+     * Reflection keeps this source compatible with older Android SDK stubs used by the project.
+     */
+    public long getPid() {
+        Process current = process;
+        if (Build.VERSION.SDK_INT < 26 || current == null) return -1L;
+        try {
+            return ((Long) Process.class.getMethod("pid").invoke(current)).longValue();
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | ClassCastException ignored) {
+            return -1L;
+        }
+    }
+
+    private static void destroyForciblyCompat(Process process) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            process.destroyForcibly();
+        } else {
+            // destroyForcibly() does not exist on API < 26.
+            process.destroy();
+        }
+    }
+
+    private static boolean isAlive(Process process) {
+        try { process.exitValue(); return false; }
+        catch (IllegalThreadStateException e) { return true; }
+    }
+
+    private Thread stream(InputStream stream, boolean isStdout, Listener listener) {
+        return new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    synchronized (this) {
+                        appendBounded(isStdout ? stdout : stderr, line);
+                    }
+                    if (listener != null) {
+                        try {
+                            if (isStdout) listener.onStdout(line);
+                            else listener.onStderr(line);
+                        } catch (Throwable ignored) { }
+                    }
+                }
+            } catch (IOException ignored) { }
+        }, isStdout ? "qemu-stdout" : "qemu-stderr");
+    }
+
+    private static void appendBounded(StringBuilder target, String line) {
+        target.append(line).append('\n');
+        if (target.length() > MAX_LOG_CHARS) {
+            target.delete(0, target.length() - MAX_LOG_CHARS);
+        }
+    }
+}

@@ -8,10 +8,10 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
-import com.anbui.elephant.retrofit2utils.Retrofit2Utils;
 import com.vectras.vm.AppConfig;
 import com.vectras.vm.R;
 import com.vectras.vm.VectrasApp;
+import com.vectras.vm.network.AppNetworkUtils;
 import com.vectras.vm.setupwizard.SetupFeatureCore;
 import com.vectras.vm.utils.DialogUtils;
 import com.vectras.vm.utils.FileUtils;
@@ -63,7 +63,7 @@ public class ToolsManager {
                             builder.setProgress(100, 0, false);
                             manager.notify(notificationId, builder.build());
 
-                            Retrofit2Utils.download(AppConfig.virtIOWinUrl, AppConfig.basefiledir + "virtio-win.bin", new Retrofit2Utils.DownloadCallback() {
+                            AppNetworkUtils.download(AppConfig.virtIOWinUrl, AppConfig.basefiledir + "virtio-win.bin", new AppNetworkUtils.DownloadCallback() {
                                 @Override
                                 public void onProgress(int percent) {
                                     builder.setProgress(100, percent, false)

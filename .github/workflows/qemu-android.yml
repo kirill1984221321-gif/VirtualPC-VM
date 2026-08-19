@@ -20,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout VirtualPC-VM
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Checkout Termux Android build system
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: termux/termux-packages
           path: .ci/termux-packages

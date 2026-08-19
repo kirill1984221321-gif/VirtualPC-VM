@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory>
+        <SwitchPreferenceCompat android:key="customMemory" android:defaultValue="false" />
+        <EditTextPreference android:key="memory" android:defaultValue="512" android:inputType="number" />
+        <SwitchPreferenceCompat android:key="autoCreateDisk" android:defaultValue="false" />
+    </PreferenceCategory>
+</PreferenceScreen>
