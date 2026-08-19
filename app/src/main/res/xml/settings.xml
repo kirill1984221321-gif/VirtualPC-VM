@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <PreferenceCategory>
         <ListPreference
             android:key="language"
-            android:title="@string/language"
             android:entries="@array/languageLabels"
             android:entryValues="@array/languageValues"
-            android:defaultValue=""
-            android:summary="@string/tap_here_to_select_language"
-            app:isPreferenceVisible="true" />
+            android:defaultValue="" />
     </PreferenceCategory>
 </PreferenceScreen>
