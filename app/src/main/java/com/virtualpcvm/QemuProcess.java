@@ -6,6 +6,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -119,9 +120,18 @@ public final class QemuProcess {
     public synchronized String getStdout() { return stdout.toString(); }
     public synchronized String getStderr() { return stderr.toString(); }
 
+    /**
+     * Return the Linux process id when the Android runtime exposes Process.pid().
+     * Reflection keeps this source compatible with older Android SDK stubs used by the project.
+     */
     public long getPid() {
-        if (Build.VERSION.SDK_INT < 26 || process == null) return -1L;
-        return process.pid();
+        Process current = process;
+        if (Build.VERSION.SDK_INT < 26 || current == null) return -1L;
+        try {
+            return ((Long) Process.class.getMethod("pid").invoke(current)).longValue();
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | ClassCastException ignored) {
+            return -1L;
+        }
     }
 
     private static void destroyForciblyCompat(Process process) {
