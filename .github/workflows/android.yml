@@ -145,10 +145,32 @@ jobs:
     - name: Verify APK outputs
       run: |
         set -euo pipefail
-        test -s app/build/outputs/apk/debug/app-debug.apk
-        test -s app/build/outputs/apk/release/app-release.apk
-        file app/build/outputs/apk/debug/app-debug.apk
-        file app/build/outputs/apk/release/app-release.apk
+
+        APK_ROOT=app/build/outputs/apk
+        DEBUG_APK="$APK_ROOT/debug/app-debug.apk"
+        RELEASE_DIR="$APK_ROOT/release"
+
+        echo "APK output inventory:"
+        find "$APK_ROOT" -type f -name '*.apk' -print -exec ls -lh {} \;
+
+        test -s "$DEBUG_APK"
+
+        mapfile -t RELEASE_APKS < <(find "$RELEASE_DIR" -maxdepth 1 -type f -name '*.apk' -print | sort)
+        if [[ "${#RELEASE_APKS[@]}" -ne 1 ]]; then
+          echo "Expected exactly one release APK, found ${#RELEASE_APKS[@]}"
+          printf 'Release APK candidates:\n'
+          printf '  %s\n' "${RELEASE_APKS[@]}"
+          exit 1
+        fi
+
+        RELEASE_APK="${RELEASE_APKS[0]}"
+        test -s "$RELEASE_APK"
+
+        echo "Debug APK: $DEBUG_APK"
+        echo "Release APK: $RELEASE_APK"
+        file "$DEBUG_APK"
+        file "$RELEASE_APK"
+        ls -lh "$DEBUG_APK" "$RELEASE_APK"
 
     - name: Upload Debug APK as artifact
       uses: actions/upload-artifact@v4
@@ -162,7 +184,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: android-release-apk
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/release/*.apk
         if-no-files-found: error
         retention-days: 14
 
