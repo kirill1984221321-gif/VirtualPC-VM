@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/settings_x11_display_resolution_mode">
+        <ListPreference
+            android:key="displayResolutionMode"
+            android:defaultValue="exact"
+            android:entries="@array/displayResolutionVariants"
+            android:entryValues="@array/displayResolutionVariants" />
+        <SeekBarPreference
+            android:key="displayScale"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="30"
+            app:seekBarIncrement="10"
+            app:showSeekBarValue="true" />
+        <ListPreference
+            android:key="displayResolutionExact"
+            android:defaultValue="1280x720"
+            android:entries="@array/displayResolution"
+            android:entryValues="@array/displayResolution" />
+        <EditTextPreference
+            android:key="displayResolutionCustom"
+            android:defaultValue="1280x720"
+            app:useSimpleSummaryProvider="true" />
+        <SwitchPreferenceCompat
+            android:key="displayStretch"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory>
+        <ListPreference
+            android:key="touchMode"
+            android:defaultValue="1"
+            android:entries="@array/touchscreenInputModesEntries"
+            android:entryValues="@array/touchscreenInputModesValues" />
+        <SwitchPreferenceCompat android:key="scaleTouchpad" android:defaultValue="true" />
+        <SwitchPreferenceCompat android:key="showMouseHelper" android:defaultValue="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory>
+        <SwitchPreferenceCompat android:key="showAdditionalKbd" android:defaultValue="true" />
+        <SwitchPreferenceCompat android:key="captureVolumeKeys" android:defaultValue="true" />
+        <SwitchPreferenceCompat android:key="hideEKOnVolDown" android:defaultValue="false" />
+        <SwitchPreferenceCompat android:key="showIMEWhileExternalConnected" android:defaultValue="false" />
+        <SwitchPreferenceCompat android:key="dexMetaKeyCapture" android:defaultValue="false" />
+        <Preference android:key="enableAccessibilityService" />
+        <SwitchPreferenceCompat android:key="enableAccessibilityServiceAutomatically" android:defaultValue="false" />
+        <SwitchPreferenceCompat android:key="pauseKeyInterceptingWithEsc" android:defaultValue="false" />
+        <SwitchPreferenceCompat android:key="filterOutWinkey" android:defaultValue="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory>
+        <SwitchPreferenceCompat android:key="hideCutout" android:defaultValue="false" />
+        <SwitchPreferenceCompat android:key="requestNotificationPermission" android:defaultValue="false" />
+        <SeekBarPreference
+            android:key="capturedPointerSpeedFactor"
+            android:defaultValue="100"
+            android:max="200"
+            app:min="30"
+            app:seekBarIncrement="1"
+            app:showSeekBarValue="true" />
+        <SeekBarPreference
+            android:key="opacityEKBar"
+            android:defaultValue="100"
+            android:max="100"
+            app:min="10"
+            app:seekBarIncrement="1"
+            app:showSeekBarValue="true" />
+        <EditTextPreference android:key="extra_keys_config" />
+    </PreferenceCategory>
+</PreferenceScreen>
