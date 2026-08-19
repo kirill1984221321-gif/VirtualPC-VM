@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory>
+        <SwitchPreferenceCompat
+            android:key="vncExternal"
+            android:defaultValue="false"
+            android:title="@string/external_vnc"
+            app:icon="@drawable/round_build_24" />
+    </PreferenceCategory>
+</PreferenceScreen>
