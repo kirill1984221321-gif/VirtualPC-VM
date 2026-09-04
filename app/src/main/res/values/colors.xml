@@ -1,5 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorItemCard">?attr/colorSurfaceContainerLowest</color>
-    <color name="red_error">#DC143C</color>
+    <!-- Material You / Material 3 Indigo Palette -->
+    <color name="md_primary">#4F6DFF</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#DDE1FF</color>
+    <color name="md_on_primary_container">#001453</color>
+    <color name="md_secondary">#5B5D72</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#E0E1F9</color>
+    <color name="md_tertiary">#77536D</color>
+    <color name="md_surface">#121318</color>
+    <color name="md_on_surface">#E3E1E9</color>
+    <color name="md_surface_variant">#45464F</color>
+    <color name="md_on_surface_variant">#C6C5D0</color>
+    <color name="md_outline">#90909A</color>
+    <color name="md_surface_container">#1E1F25</color>
+    <color name="md_surface_container_high">#282A30</color>
+
+    <!-- VM status chip colors -->
+    <color name="chip_running">#2E7D32</color>
+    <color name="chip_stopped">#424242</color>
+    <color name="color_error">#BA1A1A</color>
+    <color name="color_on_error">#FFFFFF</color>
+
+    <!-- Virtual Keyboard Colors -->
+    <color name="vnc_key_bg">#2D3038</color>
+    <color name="vnc_key_active">#4F6DFF</color>
+    <color name="vnc_key_text">#F2F2F7</color>
 </resources>

@@ -16,7 +16,7 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Row 1: name + status chip -->
+        <!-- Row 1: name + status chip + options button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -37,7 +37,18 @@
                 android:layout_height="wrap_content"
                 android:text="Остановлена"
                 android:textSize="11sp"
-                app:chipMinHeight="28dp" />
+                app:chipMinHeight="28dp"
+                android:layout_marginEnd="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOptions"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="⋮"
+                android:textSize="18sp" />
 
         </LinearLayout>
 
@@ -64,33 +75,76 @@
                 android:layout_height="wrap_content"
                 android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                 android:textColor="?attr/colorPrimary"
-                android:text="q35" />
+                android:text="pc" />
         </LinearLayout>
 
-        <!-- Row 3: buttons -->
+        <!-- Row 3: quick actions bar -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="12dp"
-            android:gravity="end">
+            android:gravity="center_vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRename"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:tooltipText="Переименовать"
+                app:icon="@android:drawable/ic_menu_edit"
+                app:iconTint="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnEdit"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:tooltipText="Настройки ВМ"
+                app:icon="@android:drawable/ic_menu_preferences"
+                app:iconTint="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDelete"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:tooltipText="Удалить ВМ"
+                app:icon="@android:drawable/ic_menu_delete"
+                app:iconTint="@color/color_error" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLogs"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="8dp"
+                android:text="Логи" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStop"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
                 android:text="Стоп"
-                app:icon="@android:drawable/ic_media_pause"
                 android:enabled="false" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStart"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Старт ВМ"
-                app:icon="@android:drawable/ic_media_play" />
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="12dp"
+                android:text="Старт" />
 
         </LinearLayout>
     </LinearLayout>

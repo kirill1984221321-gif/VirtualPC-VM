@@ -52,6 +52,22 @@
             android:visibility="gone"
             app:trackCornerRadius="4dp" />
 
+        <!-- Architecture selection -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/layoutArchSelect"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:hint="Архитектура пакетов QEMU">
+
+            <AutoCompleteTextView
+                android:id="@+id/autoCompleteArch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- Info card about source -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"

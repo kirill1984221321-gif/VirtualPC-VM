@@ -9,4 +9,14 @@
     <string name="btn_ctrl_alt_del">Ctrl+Alt+Del</string>
     <string name="status_running">Запущена</string>
     <string name="status_stopped">Остановлена</string>
+    <string name="btn_rename">Переименовать</string>
+    <string name="btn_delete">Удалить</string>
+    <string name="btn_edit">Настройки</string>
+    <string name="btn_clone">Клонировать</string>
+    <string name="btn_logs">Логи</string>
+    <string name="btn_vnc">VNC Экран</string>
+    <string name="action_rename_title">Переименовать ВМ</string>
+    <string name="action_delete_title">Удаление ВМ</string>
+    <string name="delete_confirm_msg">Удалить эту виртуальную машину?</string>
+    <string name="delete_disk_prompt">Удалить вместе с файлом виртуального диска?</string>
 </resources>

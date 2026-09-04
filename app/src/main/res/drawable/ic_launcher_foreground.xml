@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Monitor Outer Frame -->
+    <path
+        android:fillColor="#4F6DFF"
+        android:pathData="M28,26h52c3.31,0 6,2.69 6,6v34c0,3.31 -2.69,6 -6,6H28c-3.31,0 -6,-2.69 -6,-6V32c0,-3.31 2.69,-6 6,-6z"/>
+    <!-- Screen Inner Display -->
+    <path
+        android:fillColor="#0D111A"
+        android:pathData="M30,30h48c1.1,0 2,0.9 2,2v26c0,1.1 -0.9,2 -2,2H30c-1.1,0 -2,-0.9 -2,-2V32c0,-1.1 0.9,-2 2,-2z"/>
+    <!-- Terminal Prompt / Virtual OS icon on screen -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M35,37l5,5 -5,5v-2.5l2.5,-2.5 -2.5,-2.5z"/>
+    <path
+        android:fillColor="#4ADE80"
+        android:pathData="M43,45h10v2H43z"/>
+    <path
+        android:fillColor="#A5B4FC"
+        android:pathData="M56,38h16v2H56z M56,42h12v2H56z"/>
+    <!-- Stand Base -->
+    <path
+        android:fillColor="#A5B4FC"
+        android:pathData="M48,72h12v6H48z"/>
+    <path
+        android:fillColor="#7986CB"
+        android:pathData="M40,78h28c1.1,0 2,0.9 2,2v2H38v-2c0,-1.1 0.9,-2 2,-2z"/>
+</vector>

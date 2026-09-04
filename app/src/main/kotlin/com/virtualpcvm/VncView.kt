@@ -56,6 +56,8 @@ class VncView @JvmOverloads constructor(
         addUpdateListener { rippleAlpha = it.animatedValue as Float; invalidate() }
     }
 
+    var isTouchMode = true
+
     fun attach(vncClient: VncClient) {
         client = vncClient
         vncClient.onConnected = { w, h, _ ->
@@ -66,9 +68,20 @@ class VncView @JvmOverloads constructor(
                 recalcScale(w, h)
             }
         }
+        vncClient.onDesktopSizeChanged = { w, h ->
+            post {
+                synchronized(bitmapLock) {
+                    bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                }
+                recalcScale(w, h)
+            }
+        }
         vncClient.onFramebufferUpdate = { x, y, w, h, pixels ->
             synchronized(bitmapLock) {
-                bitmap?.setPixels(pixels, 0, w, x, y, w, h)
+                val bm = bitmap
+                if (bm != null && x >= 0 && y >= 0 && x + w <= bm.width && y + h <= bm.height) {
+                    bm.setPixels(pixels, 0, w, x, y, w, h)
+                }
             }
             postInvalidate()
         }
@@ -140,12 +153,11 @@ class VncView @JvmOverloads constructor(
         val (vx, vy) = viewToVnc(e.x, e.y)
         when (action) {
             MotionEvent.ACTION_MOVE -> {
-                val buttons = if (prevButtons != 0) prevButtons else 0
-                client?.sendPointerEvent(vx, vy, buttons)
+                client?.sendPointerEvent(vx, vy, prevButtons)
             }
             MotionEvent.ACTION_DOWN -> {
-                prevButtons = 0x01
-                client?.sendPointerEvent(vx, vy, prevButtons)
+                prevButtons = 0
+                client?.sendPointerEvent(vx, vy, 0)
             }
             MotionEvent.ACTION_UP -> {
                 client?.sendPointerEvent(vx, vy, 0)

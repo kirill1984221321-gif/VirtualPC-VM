@@ -29,7 +29,37 @@ class InstallActivity : AppCompatActivity() {
         binding.btnInstall.setOnClickListener { startInstall() }
         binding.btnClose.setOnClickListener   { finish() }
 
+        setupArchSelector()
         checkStatus()
+    }
+
+    private var selectedArchKey: String? = null
+
+    private fun setupArchSelector() {
+        val hostAbi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+        val detectedArch = when (hostAbi) {
+            "arm64-v8a" -> "aarch64"
+            "armeabi-v7a", "armeabi" -> "arm"
+            "x86_64" -> "x86_64"
+            "x86" -> "i686"
+            else -> if (hostAbi.contains("64")) "aarch64" else "arm"
+        }
+        selectedArchKey = detectedArch
+
+        val archOptions = listOf(
+            "Авто (рекомендуется): $detectedArch ($hostAbi)" to detectedArch,
+            "aarch64 (ARMv8 64-bit)" to "aarch64",
+            "arm (ARMv7l 32-bit)" to "arm",
+            "x86_64 (AMD64 / Intel 64-bit)" to "x86_64",
+            "i686 (x86 32-bit)" to "i686"
+        )
+        val adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, archOptions.map { it.first })
+        binding.autoCompleteArch.setAdapter(adapter)
+        binding.autoCompleteArch.setText(archOptions.first().first, false)
+
+        binding.autoCompleteArch.setOnItemClickListener { _, _, position, _ ->
+            selectedArchKey = archOptions[position].second
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean { finish(); return true }
@@ -54,13 +84,16 @@ class InstallActivity : AppCompatActivity() {
 
         binding.btnInstall.isEnabled = false
         binding.btnClose.isEnabled   = false
+        binding.layoutArchSelect.isEnabled = false
         binding.logView.text = ""
         binding.progressBar.progress = 0
         binding.progressBar.visibility = View.VISIBLE
         binding.tvStep.visibility = View.VISIBLE
 
+        val archToInstall = selectedArchKey
+
         lifecycleScope.launch {
-            QemuInstaller.install(this@InstallActivity) { progress ->
+            QemuInstaller.install(this@InstallActivity, archToInstall) { progress ->
                 runOnUiThread {
                     binding.progressBar.progress = progress.percent
                     binding.tvStep.text = progress.step
@@ -81,6 +114,7 @@ class InstallActivity : AppCompatActivity() {
                             installing = false
                             binding.btnInstall.isEnabled = true
                             binding.btnClose.isEnabled   = true
+                            binding.layoutArchSelect.isEnabled = true
                             binding.tvStatus.text = "✓ Установка завершена!"
                             binding.tvStatus.setTextColor(0xFF1B5E20.toInt())
                             Toast.makeText(this@InstallActivity,
@@ -90,6 +124,7 @@ class InstallActivity : AppCompatActivity() {
                             installing = false
                             binding.btnInstall.isEnabled = true
                             binding.btnClose.isEnabled   = true
+                            binding.layoutArchSelect.isEnabled = true
                             binding.tvStatus.text = "✗ Ошибка: ${progress.error}"
                             binding.tvStatus.setTextColor(0xFFB71C1C.toInt())
                         }

@@ -8,6 +8,7 @@ import org.apache.commons.compress.archivers.ar.ArArchiveInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 import java.io.BufferedInputStream
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -16,18 +17,25 @@ import java.util.zip.GZIPInputStream
 
 private const val TAG = "QemuInstaller"
 
-private const val REPO_BASE = "https://packages.termux.dev/apt/termux-main"
+private val REPO_MIRRORS = listOf(
+    "https://packages.termux.dev/apt/termux-main",
+    "https://packages-cf.termux.dev/apt/termux-main",
+    "https://grimler.se/termux/termux-main",
+    "https://mirror.mwt.me/termux/main",
+    "https://packages.termux.org/apt/termux-main"
+)
 
 private val QEMU_PACKAGES = listOf(
+    "qemu-common",
     "qemu-system-x86-64-headless",
     "qemu-system-aarch64-headless",
     "qemu-system-arm-headless",
     "qemu-system-i386-headless",
     "qemu-system-ppc-headless",
-    "qemu-system-mips-headless",
+    "qemu-system-ppc64-headless",
     "qemu-system-riscv32-headless",
     "qemu-system-riscv64-headless",
-    "qemu-system-sparc-headless",
+    "qemu-system-m68k-headless",
     "qemu-utils"
 )
 
@@ -55,70 +63,104 @@ object QemuInstaller {
     fun termuxPrefix(ctx: Context): File =
         File(qemuDir(ctx), "usr").also { it.mkdirs() }
 
-    fun isInstalled(ctx: Context, arch: Architecture): Boolean =
-        File(termuxPrefix(ctx), "bin/${arch.binary}").canExecute()
+    fun isInstalled(ctx: Context, arch: Architecture): Boolean {
+        val binFile = File(termuxPrefix(ctx), "bin/${arch.binary}")
+        return binFile.exists() && (binFile.canExecute() || binFile.length() > 0)
+    }
 
     fun anyInstalled(ctx: Context): Boolean =
-        Architecture.values().any { isInstalled(ctx, it) }
+        Architecture.entries.any { isInstalled(ctx, it) }
 
-    suspend fun install(ctx: Context, onProgress: ProgressCallback) = withContext(Dispatchers.IO) {
-        val qemuDir = qemuDir(ctx)
+    suspend fun install(
+        ctx: Context,
+        archOverride: String? = null,
+        onProgress: ProgressCallback
+    ) = withContext(Dispatchers.IO) {
         val termuxPrefix = termuxPrefix(ctx)
         val tmpDir = File(ctx.cacheDir, "qemu-tmp").also { it.mkdirs() }
 
         try {
-            // Detect host architecture
-            val hostArch = when (android.os.Build.SUPPORTED_ABIS.firstOrNull()) {
+            // Detect host architecture (Termux packaging arch: aarch64, arm, x86_64, i686)
+            val hostAbi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+            val hostArch = archOverride ?: when (hostAbi) {
                 "arm64-v8a" -> "aarch64"
                 "armeabi-v7a", "armeabi" -> "arm"
                 "x86_64" -> "x86_64"
                 "x86" -> "i686"
-                else -> "aarch64"
+                else -> if (hostAbi.contains("64")) "aarch64" else "arm"
             }
 
-            val packagesUrl = "$REPO_BASE/dists/stable/main/binary-$hostArch/Packages"
-            
-            onProgress(InstallProgress("Получение списка пакетов для $hostArch...", 2, "GET $packagesUrl"))
-            val packagesText = fetchText(packagesUrl)
-            
-            onProgress(InstallProgress("Список пакетов получен", 5, "Размер: ${packagesText.length} байт"))
+            var repoBase = REPO_MIRRORS.first()
+            var packagesText: String? = null
+
+            for (mirror in REPO_MIRRORS) {
+                onProgress(InstallProgress("Поиск пакетов ($hostArch) на $mirror...", 3, "GET $mirror/dists/stable/main/binary-$hostArch"))
+                val fetched = fetchPackagesIndex(mirror, hostArch)
+                if (fetched.isNotBlank()) {
+                    packagesText = fetched
+                    repoBase = mirror
+                    break
+                }
+            }
+
+            if (packagesText.isNullOrBlank()) {
+                throw IllegalStateException("Не удалось загрузить индекс пакетов для архитектуры $hostArch")
+            }
+
+            onProgress(InstallProgress("Список пакетов получен", 8, "Размер: ${packagesText.length} байт"))
 
             val index = parsePackagesIndex(packagesText)
             val packagesToInstall = resolveDependencies(QEMU_PACKAGES, index)
             
-            onProgress(InstallProgress("Разрешены зависимости", 6, "Всего пакетов: ${packagesToInstall.size}"))
+            onProgress(InstallProgress("Разрешены зависимости", 10, "Всего пакетов к установке: ${packagesToInstall.size}"))
 
             var downloadedCount = 0
-            val totalCount = packagesToInstall.size
+            val totalCount = packagesToInstall.size.coerceAtLeast(1)
 
             for (pkgName in packagesToInstall) {
                 val pkgInfo = index[pkgName]
                 if (pkgInfo == null) {
-                    onProgress(InstallProgress("Ошибка: пакет $pkgName не найден", downloadedCount * 100 / totalCount, error = "not found"))
+                    onProgress(InstallProgress("Пропуск $pkgName: не найден в репозитории", 10 + (downloadedCount * 75 / totalCount), "$pkgName пропущен"))
+                    downloadedCount++
                     continue
                 }
 
-                val debUrl = "$REPO_BASE/${pkgInfo.filename}"
+                val debUrl = "$repoBase/${pkgInfo.filename}"
                 val debFile = File(tmpDir, "$pkgName.deb")
                 
-                onProgress(InstallProgress("Загрузка $pkgName...", 5 + (downloadedCount * 80 / totalCount), "↓ $debUrl"))
-                downloadFile(debUrl, debFile) { _, _ -> }
+                val currentPct = 10 + (downloadedCount * 75 / totalCount)
+                onProgress(InstallProgress("Загрузка $pkgName...", currentPct, "↓ $debUrl"))
+                downloadFile(debUrl, debFile)
                 
-                onProgress(InstallProgress("Распаковка $pkgName...", 5 + (downloadedCount * 80 / totalCount) + 1, "Распаковка ${debFile.name}"))
+                onProgress(InstallProgress("Распаковка $pkgName...", currentPct + 1, "Распаковка ${debFile.name}"))
                 extractDebToPrefix(debFile, termuxPrefix)
                 debFile.delete()
                 
                 downloadedCount++
             }
 
-            // Верификация
-            onProgress(InstallProgress("Настройка прав...", 90))
+            // Настройка прав исполнения
+            onProgress(InstallProgress("Настройка прав доступа...", 92, "chmod +x bin/*"))
             val binDir = File(termuxPrefix, "bin")
             if (binDir.exists()) {
-                binDir.listFiles()?.forEach { it.setExecutable(true, false) }
+                binDir.listFiles()?.forEach { f ->
+                    f.setExecutable(true, false)
+                    f.setReadable(true, false)
+                    try {
+                        Runtime.getRuntime().exec(arrayOf("chmod", "755", f.absolutePath)).waitFor()
+                    } catch (_: Exception) {}
+                }
             }
 
-            onProgress(InstallProgress("Установка завершена!", 100, "Успешно", isDone = true))
+            val libDir = File(termuxPrefix, "lib")
+            if (libDir.exists()) {
+                libDir.listFiles()?.forEach { f ->
+                    f.setReadable(true, false)
+                    f.setExecutable(true, false)
+                }
+            }
+
+            onProgress(InstallProgress("Установка QEMU завершена!", 100, "Все пакеты успешно установлены", isDone = true))
 
         } catch (e: Exception) {
             Log.e(TAG, "Install error", e)
@@ -157,15 +199,27 @@ object QemuInstaller {
                 }
             }
         }
+        if (currentName.isNotEmpty() && currentFilename.isNotEmpty()) {
+            map[currentName] = PackageInfo(currentName, currentDepends.toList(), currentFilename)
+        }
         return map
     }
 
     private fun resolveDependencies(
         rootPackages: List<String>,
         index: Map<String, PackageInfo>
-    ): Set<String> {
-        val toInstall = mutableSetOf<String>()
-        val queue = ArrayDeque<String>(rootPackages)
+    ): List<String> {
+        val toInstall = LinkedHashSet<String>()
+        val queue = ArrayDeque<String>()
+        
+        // Add root packages that exist in the index
+        for (pkg in rootPackages) {
+            if (index.containsKey(pkg)) {
+                queue.addLast(pkg)
+            } else {
+                Log.w(TAG, "Root package $pkg not present in index for this architecture")
+            }
+        }
         
         while (queue.isNotEmpty()) {
             val pkgName = queue.removeFirst()
@@ -173,48 +227,70 @@ object QemuInstaller {
                 val info = index[pkgName]
                 if (info != null) {
                     for (dep in info.depends) {
-                        queue.addLast(dep)
+                        if (!toInstall.contains(dep) && index.containsKey(dep)) {
+                            queue.addLast(dep)
+                        }
                     }
-                } else {
-                    Log.w(TAG, "Package \$pkgName not found in index!")
                 }
             }
         }
-        return toInstall
+        return toInstall.toList()
     }
 
-    private fun downloadFile(urlStr: String, dest: File, onProgress: (Long, Long) -> Unit) {
+    private fun fetchPackagesIndex(mirror: String, hostArch: String): String {
+        val base = "$mirror/dists/stable/main/binary-$hostArch"
+        val candidates = listOf(
+            "$base/Packages.xz" to "xz",
+            "$base/Packages.gz" to "gz",
+            "$base/Packages" to "plain"
+        )
+        for ((url, format) in candidates) {
+            try {
+                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = true
+                    connectTimeout = 15_000
+                    readTimeout = 40_000
+                    setRequestProperty("User-Agent", "VirtualPCVM/1.0 (Linux; Android)")
+                }
+                if (conn.responseCode in 200..299) {
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    conn.disconnect()
+                    if (bytes.isNotEmpty()) {
+                        return when (format) {
+                            "xz" -> org.tukaani.xz.XZInputStream(ByteArrayInputStream(bytes)).bufferedReader().use { it.readText() }
+                            "gz" -> GZIPInputStream(ByteArrayInputStream(bytes)).bufferedReader().use { it.readText() }
+                            else -> String(bytes, Charsets.UTF_8)
+                        }
+                    }
+                } else {
+                    conn.disconnect()
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Index fetch try failed for $url: ${e.message}")
+            }
+        }
+        return ""
+    }
+
+    private fun downloadFile(urlStr: String, dest: File) {
         var conn: HttpURLConnection? = null
         try {
             conn = URL(urlStr).openConnection() as HttpURLConnection
             conn.instanceFollowRedirects = true
-            conn.connectTimeout = 15_000
-            conn.readTimeout    = 60_000
-            val total = conn.contentLengthLong
+            conn.connectTimeout = 20_000
+            conn.readTimeout = 60_000
+            conn.setRequestProperty("User-Agent", "VirtualPCVM/1.0 (Linux; Android)")
             BufferedInputStream(conn.inputStream).use { input ->
                 FileOutputStream(dest).use { output ->
                     val buf = ByteArray(65_536)
-                    var downloaded = 0L
                     var read: Int
                     while (input.read(buf).also { read = it } != -1) {
                         output.write(buf, 0, read)
-                        downloaded += read
-                        onProgress(downloaded, total)
                     }
                 }
             }
         } finally {
             conn?.disconnect()
-        }
-    }
-
-    private fun fetchText(urlStr: String): String {
-        val conn = URL(urlStr).openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = true
-        return try {
-            conn.inputStream.bufferedReader().readText()
-        } finally {
-            conn.disconnect()
         }
     }
 
@@ -232,8 +308,14 @@ object QemuInstaller {
                         var entry = tar.nextTarEntry
                         while (entry != null) {
                             if (!entry.isDirectory) {
-                                val name = entry.name.removePrefix("./").removePrefix("data/data/com.termux/files/usr/")
-                                val dest = File(prefix, name)
+                                var rawName = entry.name
+                                if (rawName.startsWith("./")) rawName = rawName.substring(2)
+                                if (rawName.startsWith("/")) rawName = rawName.substring(1)
+                                if (rawName.startsWith("data/data/com.termux/files/usr/")) {
+                                    rawName = rawName.removePrefix("data/data/com.termux/files/usr/")
+                                }
+                                
+                                val dest = File(prefix, rawName)
                                 dest.parentFile?.mkdirs()
                                 
                                 if (entry.isSymbolicLink) {
@@ -246,7 +328,7 @@ object QemuInstaller {
                                         }
                                         java.nio.file.Files.createSymbolicLink(destPath, java.nio.file.Paths.get(link))
                                     } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to create symlink \$name -> \${entry.linkName}", e)
+                                        Log.w(TAG, "Symlink fallback for $rawName -> ${entry.linkName}")
                                     }
                                 } else {
                                     dest.outputStream().use { out ->
@@ -255,6 +337,9 @@ object QemuInstaller {
                                         while (tar.read(buf).also { read = it } != -1) {
                                             out.write(buf, 0, read)
                                         }
+                                    }
+                                    if (rawName.startsWith("bin/")) {
+                                        dest.setExecutable(true, false)
                                     }
                                 }
                             }

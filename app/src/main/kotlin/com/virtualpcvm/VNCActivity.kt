@@ -7,15 +7,20 @@ import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.virtualpcvm.databinding.ActivityVncBinding
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
- * Full-screen VNC viewer activity.
- *
- * Receives: host (String), port (Int), vmName (String), vmId (Long).
- * Implements RFB client using [VncClient] and renders via [VncView].
+ * Full-screen VNC viewer activity with on-screen PC keyboard bar,
+ * real-time process monitoring, and connection diagnostics.
  */
 class VNCActivity : AppCompatActivity() {
 
@@ -29,11 +34,18 @@ class VNCActivity : AppCompatActivity() {
     private lateinit var binding: ActivityVncBinding
     private var client: VncClient? = null
     private var vmId: Long = -1L
+    private var host: String = "127.0.0.1"
+    private var port: Int = 5901
+
+    // Modifier keys state for on-screen PC keyboard
+    private var isCtrlActive = false
+    private var isAltActive = false
+    private var isShiftActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // full-screen immersive
+        // Full-screen immersive sticky mode
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -44,37 +56,232 @@ class VNCActivity : AppCompatActivity() {
         binding = ActivityVncBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val host   = intent.getStringExtra(EXTRA_HOST)   ?: "127.0.0.1"
-        val port   = intent.getIntExtra(EXTRA_PORT, 5901)
+        host   = intent.getStringExtra(EXTRA_HOST)   ?: "127.0.0.1"
+        port   = intent.getIntExtra(EXTRA_PORT, 5901)
         val vmName = intent.getStringExtra(EXTRA_VM_NAME) ?: "ВМ"
-        vmId       = intent.getLongExtra(EXTRA_VM_ID, -1L)
+        vmId   = intent.getLongExtra(EXTRA_VM_ID, -1L)
 
         binding.tvTitle.text = vmName
 
-        // toolbar buttons
+        // Toolbar navigation & controls
         binding.btnBack.setOnClickListener { finish() }
-        binding.btnKeyboard.setOnClickListener { toggleKeyboard() }
-        binding.btnCtrlAltDel.setOnClickListener { sendCtrlAltDel() }
         binding.btnStop.setOnClickListener { stopVm() }
         binding.btnLogs.setOnClickListener { toggleLogs() }
+        binding.btnCloseLogs.setOnClickListener { binding.layoutLogs.visibility = View.GONE }
+        binding.btnRetryConnect.setOnClickListener { connect(host, port) }
 
-        // connect
+        // Mouse mode toggle (Touch vs Trackpad)
+        binding.btnMouseMode.setOnClickListener {
+            val view = binding.vncView
+            view.isTouchMode = !view.isTouchMode
+            binding.btnMouseMode.text = if (view.isTouchMode) "🖱 Тач" else "🖱 Мышь"
+            Toast.makeText(
+                this,
+                if (view.isTouchMode) "Режим: Сенсорный экран" else "Режим: Мышь / Курсор",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        // PC Keyboard bar toggle
+        binding.btnToggleKeyboardBar.setOnClickListener {
+            val isVisible = binding.layoutPcKeyboardBar.visibility == View.VISIBLE
+            binding.layoutPcKeyboardBar.visibility = if (isVisible) View.GONE else View.VISIBLE
+        }
+
+        // Setup bottom PC Keyboard controls
+        setupPcKeyboard()
+
+        // Start connection & real-time monitoring
         connect(host, port)
         startResourceMonitor()
     }
 
-    private fun startResourceMonitor() {
-        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        val memInfo = android.app.ActivityManager.MemoryInfo()
+    private fun setupPcKeyboard() {
+        // Special single-press keys
+        binding.keyEsc.setOnClickListener { sendKey(0xFF1B) }
+        binding.keyTab.setOnClickListener { sendKey(0xFF09) }
+        binding.keyWin.setOnClickListener { sendKey(0xFFEB) }
+        binding.keyEnter.setOnClickListener { sendKey(0xFF0D) }
+        binding.keyBackspace.setOnClickListener { sendKey(0xFF08) }
 
+        // Navigation arrows
+        binding.keyUp.setOnClickListener { sendKey(0xFF52) }
+        binding.keyDown.setOnClickListener { sendKey(0xFF54) }
+        binding.keyLeft.setOnClickListener { sendKey(0xFF51) }
+        binding.keyRight.setOnClickListener { sendKey(0xFF53) }
+
+        // Modifier toggles: Ctrl
+        binding.keyCtrl.setOnClickListener {
+            isCtrlActive = !isCtrlActive
+            client?.sendKeyEvent(0xFFE3, isCtrlActive)
+            updateModifierButtonState(binding.keyCtrl, isCtrlActive, "Ctrl")
+        }
+
+        // Modifier toggles: Alt
+        binding.keyAlt.setOnClickListener {
+            isAltActive = !isAltActive
+            client?.sendKeyEvent(0xFFE9, isAltActive)
+            updateModifierButtonState(binding.keyAlt, isAltActive, "Alt")
+        }
+
+        // Modifier toggles: Shift
+        binding.keyShift.setOnClickListener {
+            isShiftActive = !isShiftActive
+            client?.sendKeyEvent(0xFFE1, isShiftActive)
+            updateModifierButtonState(binding.keyShift, isShiftActive, "Shift")
+        }
+
+        // F1-F12 popup menu
+        binding.keyFKeys.setOnClickListener { v ->
+            val popup = PopupMenu(this, v)
+            for (i in 1..12) {
+                popup.menu.add("F$i")
+            }
+            popup.setOnMenuItemClickListener { item ->
+                val fNum = item.title.toString().removePrefix("F").toIntOrNull() ?: 1
+                val keySym = 0xFFBE + (fNum - 1)
+                sendKey(keySym.toLong())
+                true
+            }
+            popup.show()
+        }
+
+        // Common shortcut combos
+        binding.keyCombos.setOnClickListener { v ->
+            val popup = PopupMenu(this, v)
+            popup.menu.add("Ctrl + Alt + Del")
+            popup.menu.add("Alt + F4")
+            popup.menu.add("Alt + Tab")
+            popup.menu.add("Ctrl + Esc (Пуск)")
+            popup.menu.add("Ctrl + C (Копировать)")
+            popup.menu.add("Ctrl + V (Вставить)")
+            popup.menu.add("Ctrl + Z (Отмена)")
+            popup.setOnMenuItemClickListener { item ->
+                when (item.title) {
+                    "Ctrl + Alt + Del" -> sendCtrlAltDel()
+                    "Alt + F4" -> sendCombo(listOf(0xFFE9, 0xFFC1))
+                    "Alt + Tab" -> sendCombo(listOf(0xFFE9, 0xFF09))
+                    "Ctrl + Esc (Пуск)" -> sendCombo(listOf(0xFFE3, 0xFF1B))
+                    "Ctrl + C (Копировать)" -> sendCombo(listOf(0xFFE3, 0x63))
+                    "Ctrl + V (Вставить)" -> sendCombo(listOf(0xFFE3, 0x76))
+                    "Ctrl + Z (Отмена)" -> sendCombo(listOf(0xFFE3, 0x7A))
+                }
+                true
+            }
+            popup.show()
+        }
+
+        // Soft keyboard input button
+        binding.keySoftKeyboard.setOnClickListener {
+            toggleSoftKeyboard()
+        }
+    }
+
+    private fun updateModifierButtonState(button: MaterialButton, active: Boolean, label: String) {
+        if (active) {
+            button.setBackgroundColor(ContextCompat.getColor(this, R.color.chip_running))
+            button.text = "● $label"
+        } else {
+            button.setBackgroundColor(ContextCompat.getColor(this, android.R.color.transparent))
+            button.text = label
+        }
+    }
+
+    private fun sendKey(keySym: Long) {
+        val c = client ?: return
+        c.sendKeyEvent(keySym, true)
+        c.sendKeyEvent(keySym, false)
+        // Auto-release single-shot modifiers if desired
+        if (isShiftActive) {
+            isShiftActive = false
+            c.sendKeyEvent(0xFFE1, false)
+            updateModifierButtonState(binding.keyShift, false, "Shift")
+        }
+    }
+
+    private fun sendCombo(keys: List<Long>) {
+        val c = client ?: return
+        for (k in keys) c.sendKeyEvent(k, true)
+        for (k in keys.reversed()) c.sendKeyEvent(k, false)
+    }
+
+    private fun sendCtrlAltDel() {
+        val c = client ?: return
+        c.sendKeyEvent(0xFFE3, true)   // Ctrl_L
+        c.sendKeyEvent(0xFFE9, true)   // Alt_L
+        c.sendKeyEvent(0xFFFF, true)   // Delete
+        c.sendKeyEvent(0xFFFF, false)
+        c.sendKeyEvent(0xFFE9, false)
+        c.sendKeyEvent(0xFFE3, false)
+    }
+
+    private fun connect(host: String, port: Int) {
+        client?.disconnect()
+
+        binding.progressConnecting.visibility = View.VISIBLE
+        binding.btnRetryConnect.visibility = View.GONE
+        binding.tvStatus.visibility = View.VISIBLE
+        binding.tvStatus.text = "Подключение к $host:$port..."
+
+        val c = VncClient(host, port)
+        c.isProcessAliveCheck = {
+            if (vmId != -1L) QemuManager.isRunning(vmId) else true
+        }
+        client = c
+
+        c.onConnectingProgress = { attempt, maxAttempts ->
+            runOnUiThread {
+                binding.tvStatus.text = "Подключение к $host:$port ($attempt/$maxAttempts)..."
+            }
+        }
+
+        c.onConnected = { w, h, name ->
+            runOnUiThread {
+                binding.layoutConnecting.visibility = View.GONE
+                binding.vncView.visibility = View.VISIBLE
+                Toast.makeText(this, "VNC: ${w}×${h} «$name»", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        c.onDisconnected = { reason ->
+            runOnUiThread {
+                binding.progressConnecting.visibility = View.GONE
+                binding.layoutConnecting.visibility = View.VISIBLE
+                binding.btnRetryConnect.visibility = View.VISIBLE
+
+                if (reason.startsWith("DIAGNOSTICS_FAILED:")) {
+                    val msg = reason.substringAfter(":")
+                    binding.tvStatus.text = "Ошибка подключения к ВМ"
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("Диагностика соединения")
+                        .setMessage(msg)
+                        .setPositiveButton("Посмотреть логи") { _, _ ->
+                            toggleLogs()
+                        }
+                        .setNegativeButton("Закрыть", null)
+                        .show()
+                } else {
+                    binding.tvStatus.text = "Отключено: $reason"
+                }
+            }
+        }
+
+        binding.vncView.attach(c)
+        c.connect(lifecycleScope)
+    }
+
+    private fun startResourceMonitor() {
         lifecycleScope.launch {
-            while (true) {
-                am.getMemoryInfo(memInfo)
-                val totalRam = memInfo.totalMem / (1024 * 1024)
-                val availRam = memInfo.availMem / (1024 * 1024)
-                val usedRam = totalRam - availRam
-                binding.tvResourceMonitor.text = "Sys RAM: $usedRam / ${totalRam}MB"
-                kotlinx.coroutines.delay(2000)
+            while (isActive) {
+                val runtime = Runtime.getRuntime()
+                val usedMemMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+                val maxMemMb = runtime.maxMemory() / (1024 * 1024)
+
+                val isRunning = if (vmId != -1L) QemuManager.isRunning(vmId) else true
+                val statusText = if (isRunning) "ВМ активна" else "Остановлена"
+                binding.tvResourceMonitor.text = "ОЗУ: ${usedMemMb}MB / ${maxMemMb}MB [$statusText]"
+
+                delay(2000)
             }
         }
     }
@@ -98,54 +305,21 @@ class VNCActivity : AppCompatActivity() {
 
     private fun updateLogs() {
         if (vmId == -1L || binding.layoutLogs.visibility != View.VISIBLE) return
-        val logs = QemuManager.getLogs(vmId).joinToString("\n")
-        binding.tvLogs.text = logs
+        val logs = QemuManager.getLogs(vmId).joinToString("<br>")
+        binding.tvLogs.text = android.text.Html.fromHtml(
+            if (logs.isBlank()) "Логи пусты. Процесс ещё не вывел сообщений." else logs,
+            android.text.Html.FROM_HTML_MODE_COMPACT
+        )
         binding.scrollLogs.post {
             binding.scrollLogs.fullScroll(View.FOCUS_DOWN)
         }
         binding.tvLogs.postDelayed({ updateLogs() }, 1000)
     }
 
-    private fun connect(host: String, port: Int) {
-        binding.progressConnecting.visibility = View.VISIBLE
-        binding.tvStatus.visibility = View.VISIBLE
-        binding.tvStatus.text = "Подключение к $host:$port..."
-
-        val c = VncClient(host, port)
-        client = c
-
-        c.onConnected = { w, h, name ->
-            runOnUiThread {
-                binding.progressConnecting.visibility = View.GONE
-                binding.tvStatus.visibility = View.GONE
-                binding.vncView.visibility = View.VISIBLE
-                Toast.makeText(this, "VNC: ${w}×${h} «$name»", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        c.onDisconnected = { reason ->
-            runOnUiThread {
-                binding.progressConnecting.visibility = View.GONE
-                binding.tvStatus.text = "Отключено: $reason"
-                binding.tvStatus.visibility = View.VISIBLE
-                Toast.makeText(this, "VNC отключился: $reason", Toast.LENGTH_LONG).show()
-            }
-        }
-
-        binding.vncView.attach(c)
-        c.connect(lifecycleScope)
-    }
-
-    /* ── keyboard helpers ── */
-
-    private fun toggleKeyboard() {
+    private fun toggleSoftKeyboard() {
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        if (imm.isAcceptingText) {
-            imm.hideSoftInputFromWindow(binding.vncView.windowToken, 0)
-        } else {
-            binding.vncView.requestFocus()
-            imm.showSoftInput(binding.vncView, InputMethodManager.SHOW_IMPLICIT)
-        }
+        binding.vncView.requestFocus()
+        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -160,18 +334,6 @@ class VNCActivity : AppCompatActivity() {
         return true
     }
 
-    private fun sendCtrlAltDel() {
-        val c = client ?: return
-        // Ctrl down, Alt down, Del down, Del up, Alt up, Ctrl up
-        c.sendKeyEvent(0xFFE3, true)   // Ctrl_L
-        c.sendKeyEvent(0xFFE9, true)   // Alt_L
-        c.sendKeyEvent(0xFFFF, true)   // Delete
-        c.sendKeyEvent(0xFFFF, false)
-        c.sendKeyEvent(0xFFE9, false)
-        c.sendKeyEvent(0xFFE3, false)
-    }
-
-    /* ── Android keyCode → X11 keysym ── */
     private fun androidKeyToX11(code: Int): Long? = when (code) {
         KeyEvent.KEYCODE_A -> 0x61; KeyEvent.KEYCODE_B -> 0x62
         KeyEvent.KEYCODE_C -> 0x63; KeyEvent.KEYCODE_D -> 0x64
@@ -193,7 +355,7 @@ class VNCActivity : AppCompatActivity() {
         KeyEvent.KEYCODE_8 -> 0x38; KeyEvent.KEYCODE_9 -> 0x39
         KeyEvent.KEYCODE_SPACE   -> 0x20
         KeyEvent.KEYCODE_ENTER   -> 0xFF0D
-        KeyEvent.KEYCODE_DEL     -> 0xFF08 // Backspace
+        KeyEvent.KEYCODE_DEL     -> 0xFF08
         KeyEvent.KEYCODE_FORWARD_DEL -> 0xFFFF
         KeyEvent.KEYCODE_ESCAPE  -> 0xFF1B
         KeyEvent.KEYCODE_TAB     -> 0xFF09

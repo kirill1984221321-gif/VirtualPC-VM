@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="16dp">
@@ -10,12 +11,26 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Preset -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Быстрый пресет"
+            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+            android:layout_marginBottom="4dp"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+        <Spinner
+            android:id="@+id/spinPreset"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="12dp" />
+
         <!-- Name -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:hint="Название ВМ"
+            android:hint="Название виртуальной машины"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etName"
@@ -24,51 +39,173 @@
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Architecture -->
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Архитектура" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-            android:layout_marginBottom="4dp" android:textColor="?attr/colorOnSurfaceVariant" />
-        <Spinner android:id="@+id/spinArch"
-            android:layout_width="match_parent" android:layout_height="48dp"
-            android:layout_marginBottom="12dp" />
+        <!-- Architecture & Machine row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
 
-        <!-- Machine type -->
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="Тип машины" android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-            android:layout_marginBottom="4dp" android:textColor="?attr/colorOnSurfaceVariant" />
-        <Spinner android:id="@+id/spinMachine"
-            android:layout_width="match_parent" android:layout_height="48dp"
-            android:layout_marginBottom="12dp" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginEnd="6dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Архитектура"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+                <Spinner
+                    android:id="@+id/spinArch"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp" />
+            </LinearLayout>
 
-        <!-- RAM -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="6dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Тип машины"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+                <Spinner
+                    android:id="@+id/spinMachine"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- RAM & CPU Cores row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:hint="RAM (МБ)"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etRam"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:hint="Ядра CPU"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etCpu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <!-- CPU Model -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:hint="RAM (МБ)"
+            android:hint="Модель CPU (например max, host, cortex-a57)"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etRam"
+                android:id="@+id/etCpuModel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="numberDecimal" />
+                android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- CPU -->
-        <com.google.android.material.textfield.TextInputLayout
+        <!-- Boot Device & VGA driver row -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:hint="Ядра ЦП"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etCpu"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="number" />
-        </com.google.android.material.textfield.TextInputLayout>
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
 
-        <!-- Disk path -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginEnd="6dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Загрузочное устройство"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+                <Spinner
+                    android:id="@+id/spinBootDevice"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="6dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Видеоадаптер (VGA)"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+                <Spinner
+                    android:id="@+id/spinVga"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Network mode -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Сетевой режим"
+            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+        <Spinner
+            android:id="@+id/spinNetwork"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Switches: Audio & KVM -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchAudio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Включить эмуляцию звука (AC97)"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchKvm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Аппаратная виртуализация KVM (/dev/kvm)"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Disk path & Create button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -78,7 +215,7 @@
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:hint="Путь к диску (.img/.qcow2)"
+                android:hint="Файл жесткого диска"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etDisk"
@@ -87,13 +224,13 @@
                     android:inputType="text" />
             </com.google.android.material.textfield.TextInputLayout>
             
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCreateDisk"
+                style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="wrap_content"
-                android:layout_height="match_parent"
+                android:layout_height="56dp"
                 android:layout_marginStart="8dp"
-                android:text="Создать"
-                style="@style/Widget.Material3.Button.TextButton" />
+                android:text="Создать" />
         </LinearLayout>
 
         <!-- ISO path -->
@@ -106,7 +243,7 @@
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:hint="Путь к ISO"
+                android:hint="Образ CD/ISO"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etIso"
@@ -115,14 +252,42 @@
                     android:inputType="text" />
             </com.google.android.material.textfield.TextInputLayout>
             
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSelectIso"
+                style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="wrap_content"
-                android:layout_height="match_parent"
+                android:layout_height="56dp"
                 android:layout_marginStart="8dp"
-                android:text="Выбрать"
-                style="@style/Widget.Material3.Button.TextButton" />
+                android:text="Выбрать" />
         </LinearLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchUsbTablet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="USB Tablet (абсолютное позиционирование мыши)"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchMtcg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Многопоточный процессор (MTTCG)"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Extra arguments -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:hint="Дополнительные аргументы QEMU"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etExtraArgs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text" />
+        </com.google.android.material.textfield.TextInputLayout>
 
     </LinearLayout>
 </ScrollView>

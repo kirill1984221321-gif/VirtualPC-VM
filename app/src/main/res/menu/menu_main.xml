@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_download"
+        android:title="Скачать образы (ISO)"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_cleanup"
+        android:title="Очистка памяти"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_install"
+        android:title="Менеджер QEMU"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_settings"
+        android:title="Системные настройки"
+        app:showAsAction="never" />
+</menu>
