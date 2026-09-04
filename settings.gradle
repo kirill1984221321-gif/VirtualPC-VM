@@ -1,6 +1,15 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 plugins {
     id "org.gradle.toolchains.foojay-resolver-convention" version "1.0.0"
 }
-rootProject.name = "Vectras VM"
+rootProject.name = "Virtual PC VM"
 
-include ':app', ':terminal-emulator', ':terminal-view', ':shell-loader:stub', ':shell-loader'
+include ':app'
+

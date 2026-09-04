@@ -1,37 +1,13 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-buildscript {
-    ext {
-        kotlin_version = '2.3.10'
-    }
-    repositories {
-        mavenCentral()
-        google()
-    }
-
-    dependencies {
-        classpath libs.gradle
-        classpath libs.kotlin.gradle.plugin
-        // Android Gradle plugin
-        // Add other classpaths like Google Services and Firebase Crashlytics if needed here.
-        classpath libs.google.services  // assuming you need it for your project
-        classpath libs.firebase.crashlytics.gradle
-// assuming you need it for project
-    }
-}
-tasks.register('clean', Delete) {
-    delete rootProject.buildDir
+plugins {
+    id 'com.android.application' version '8.4.1' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
+    id 'org.jetbrains.kotlin.plugin.parcelize' version '1.9.24' apply false
 }
 
 allprojects {
     repositories {
-        mavenCentral()
         google()
+        mavenCentral()
     }
 }
 
-ext {
-    toolsVersion = properties.get('TOOLS_VERSION', '35.0.0')
-    compileApi = properties.get('COMPILE_API', 35)
-    targetApi = properties.get('TARGET_API', 28)
-    minApi = properties.get('MIN_API', 23)
-}

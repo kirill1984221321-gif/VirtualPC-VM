@@ -1,0 +1,6 @@
+{
+  "name": "Virtual PC VM",
+  "description": "Virtual machine manager and PC emulator for Android running QEMU and VNC",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
