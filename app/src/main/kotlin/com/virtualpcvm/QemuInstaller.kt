@@ -81,19 +81,35 @@ object QemuInstaller {
 
         try {
             // Detect host architecture (Termux packaging arch: aarch64, arm, x86_64, i686)
-            val hostAbi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
-            val hostArch = archOverride ?: when (hostAbi) {
+            val supportedAbis = android.os.Build.SUPPORTED_ABIS.toList()
+            val primaryAbi = supportedAbis.firstOrNull() ?: "arm64-v8a"
+            var hostArch = archOverride ?: when (primaryAbi) {
                 "arm64-v8a" -> "aarch64"
                 "armeabi-v7a", "armeabi" -> "arm"
                 "x86_64" -> "x86_64"
                 "x86" -> "i686"
-                else -> if (hostAbi.contains("64")) "aarch64" else "arm"
+                else -> if (primaryAbi.contains("64")) "aarch64" else "arm"
             }
 
-            var repoBase = REPO_MIRRORS.first()
+            // Termux dropped official support for arm and i686. Use aarch64 via ARM translation if available.
+            if (hostArch == "arm" || hostArch == "i686") {
+                if (supportedAbis.contains("arm64-v8a")) {
+                    hostArch = "aarch64"
+                }
+            }
+
+            // Fallback for deprecated architectures
+            val isLegacyArch = hostArch == "arm" || hostArch == "i686"
+            val mirrorsToTry = if (isLegacyArch) {
+                listOf("https://packages.termux.dev/apt/termux-main-21")
+            } else {
+                REPO_MIRRORS
+            }
+
+            var repoBase = mirrorsToTry.first()
             var packagesText: String? = null
 
-            for (mirror in REPO_MIRRORS) {
+            for (mirror in mirrorsToTry) {
                 onProgress(InstallProgress("Поиск пакетов ($hostArch) на $mirror...", 3, "GET $mirror/dists/stable/main/binary-$hostArch"))
                 val fetched = fetchPackagesIndex(mirror, hostArch)
                 if (fetched.isNotBlank()) {

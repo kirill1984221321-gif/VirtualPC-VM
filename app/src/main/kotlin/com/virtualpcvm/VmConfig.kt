@@ -64,4 +64,5 @@ data class VmConfig(
     val vncDisplay: Int = 1,   // :1 → port 5901
 ) : Parcelable {
     val vncPort: Int get() = 5900 + vncDisplay
+    val monitorPort: Int get() = 4440 + vncDisplay
 }

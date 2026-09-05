@@ -32,18 +32,47 @@ class VncView @JvmOverloads constructor(
     private var scaleX = 1f; private var scaleY = 1f
     private var panX   = 0f; private var panY   = 0f
 
-    // gesture detector for long-press & tap
+    // gesture detector for long-press, tap, and 2-finger pan
     private val gestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onLongPress(e: MotionEvent) {
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             val (vx, vy) = viewToVnc(e.x, e.y)
             client?.sendPointerEvent(vx, vy, 0x04) // right button down
             client?.sendPointerEvent(vx, vy, 0x00) // release
             showRipple(e.x, e.y)
         }
         override fun onSingleTapUp(e: MotionEvent): Boolean {
+            performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
             val (vx, vy) = viewToVnc(e.x, e.y)
             client?.sendPointerEvent(vx, vy, 0x01) // left down
             client?.sendPointerEvent(vx, vy, 0x00) // left up
+            return true
+        }
+        override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+            if (e2.pointerCount >= 2) {
+                panX -= distanceX
+                panY -= distanceY
+                invalidate()
+                return true
+            }
+            return false
+        }
+    })
+
+    // pinch to zoom
+    private val scaleDetector = android.view.ScaleGestureDetector(ctx, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScale(detector: android.view.ScaleGestureDetector): Boolean {
+            val scaleFactor = detector.scaleFactor
+            val focusX = detector.focusX
+            val focusY = detector.focusY
+            
+            scaleX *= scaleFactor
+            scaleY *= scaleFactor
+            
+            panX = focusX + (panX - focusX) * scaleFactor
+            panY = focusY + (panY - focusY) * scaleFactor
+            
+            invalidate()
             return true
         }
     })
@@ -127,26 +156,14 @@ class VncView @JvmOverloads constructor(
     private var twoFingerStart = false
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        scaleDetector.onTouchEvent(e)
         gestureDetector.onTouchEvent(e)
 
         val numPointers = e.pointerCount
         val action = e.actionMasked
 
-        if (numPointers == 2) {
-            // Two-finger drag → scroll wheel simulation
-            if (action == MotionEvent.ACTION_MOVE) {
-                val avgX = (e.getX(0) + e.getX(1)) / 2f
-                val avgY = (e.getY(0) + e.getY(1)) / 2f
-                val (vx, vy) = viewToVnc(avgX, avgY)
-                // detect up/down from historical data
-                val hist = e.historySize
-                if (hist > 0) {
-                    val dy = avgY - (e.getHistoricalY(0, 0) + e.getHistoricalY(1, 0)) / 2f
-                    val btn = if (dy < 0) 0x08 else 0x10 // scroll up/down
-                    client?.sendPointerEvent(vx, vy, btn)
-                    client?.sendPointerEvent(vx, vy, 0)
-                }
-            }
+        // Block mouse events if we are zooming or panning with 2+ fingers
+        if (scaleDetector.isInProgress || numPointers >= 2) {
             return true
         }
 

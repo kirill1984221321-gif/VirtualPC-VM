@@ -9,6 +9,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -29,6 +32,7 @@ class VNCActivity : AppCompatActivity() {
         const val EXTRA_PORT    = "vnc_port"
         const val EXTRA_VM_NAME = "vm_name"
         const val EXTRA_VM_ID   = "vm_id"
+        const val EXTRA_MONITOR_PORT = "monitor_port"
     }
 
     private lateinit var binding: ActivityVncBinding
@@ -36,6 +40,7 @@ class VNCActivity : AppCompatActivity() {
     private var vmId: Long = -1L
     private var host: String = "127.0.0.1"
     private var port: Int = 5901
+    private var monitorPort: Int = -1
 
     // Modifier keys state for on-screen PC keyboard
     private var isCtrlActive = false
@@ -45,19 +50,18 @@ class VNCActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Full-screen immersive sticky mode
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        )
+        // Full-screen immersive sticky mode using modern WindowInsetsControllerCompat
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
         binding = ActivityVncBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         host   = intent.getStringExtra(EXTRA_HOST)   ?: "127.0.0.1"
         port   = intent.getIntExtra(EXTRA_PORT, 5901)
+        monitorPort = intent.getIntExtra(EXTRA_MONITOR_PORT, -1)
         val vmName = intent.getStringExtra(EXTRA_VM_NAME) ?: "ВМ"
         vmId   = intent.getLongExtra(EXTRA_VM_ID, -1L)
 
@@ -88,6 +92,22 @@ class VNCActivity : AppCompatActivity() {
             binding.layoutPcKeyboardBar.visibility = if (isVisible) View.GONE else View.VISIBLE
         }
 
+        binding.btnSaveSnapshot.setOnClickListener {
+            lifecycleScope.launch {
+                Toast.makeText(this@VNCActivity, "Сохранение состояния...", Toast.LENGTH_SHORT).show()
+                val result = QemuManager.executeMonitorCommand(monitorPort, "savevm auto_snap")
+                Toast.makeText(this@VNCActivity, if (result.contains("Error") || result.contains("failed")) result else "Состояние сохранено!", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        binding.btnLoadSnapshot.setOnClickListener {
+            lifecycleScope.launch {
+                Toast.makeText(this@VNCActivity, "Загрузка состояния...", Toast.LENGTH_SHORT).show()
+                val result = QemuManager.executeMonitorCommand(monitorPort, "loadvm auto_snap")
+                Toast.makeText(this@VNCActivity, if (result.contains("Error") || result.contains("failed")) result else "Состояние восстановлено!", Toast.LENGTH_LONG).show()
+            }
+        }
+
         // Setup bottom PC Keyboard controls
         setupPcKeyboard()
 
@@ -97,6 +117,40 @@ class VNCActivity : AppCompatActivity() {
     }
 
     private fun setupPcKeyboard() {
+        // Drag logic for the keyboard bar
+        var dX = 0f
+        var dY = 0f
+        binding.keyboardDragHandle.setOnTouchListener { _, event ->
+            val view = binding.layoutPcKeyboardBar
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val root = binding.root
+                    var newX = event.rawX + dX
+                    var newY = event.rawY + dY
+
+                    // Constrain within screen bounds
+                    val maxX = (root.width - view.width).toFloat().coerceAtLeast(0f)
+                    val maxY = (root.height - view.height).toFloat().coerceAtLeast(0f)
+
+                    newX = newX.coerceIn(0f, maxX)
+                    newY = newY.coerceIn(0f, maxY)
+
+                    view.animate()
+                        .x(newX)
+                        .y(newY)
+                        .setDuration(0)
+                        .start()
+                    true
+                }
+                else -> false
+            }
+        }
+
         // Special single-press keys
         binding.keyEsc.setOnClickListener { sendKey(0xFF1B) }
         binding.keyTab.setOnClickListener { sendKey(0xFF09) }
@@ -178,6 +232,7 @@ class VNCActivity : AppCompatActivity() {
     }
 
     private fun updateModifierButtonState(button: MaterialButton, active: Boolean, label: String) {
+        button.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         if (active) {
             button.setBackgroundColor(ContextCompat.getColor(this, R.color.chip_running))
             button.text = "● $label"
@@ -189,6 +244,10 @@ class VNCActivity : AppCompatActivity() {
 
     private fun sendKey(keySym: Long) {
         val c = client ?: return
+        
+        // Haptic feedback for key press
+        binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        
         c.sendKeyEvent(keySym, true)
         c.sendKeyEvent(keySym, false)
         // Auto-release single-shot modifiers if desired
@@ -201,12 +260,18 @@ class VNCActivity : AppCompatActivity() {
 
     private fun sendCombo(keys: List<Long>) {
         val c = client ?: return
+        
+        binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        
         for (k in keys) c.sendKeyEvent(k, true)
         for (k in keys.reversed()) c.sendKeyEvent(k, false)
     }
 
     private fun sendCtrlAltDel() {
         val c = client ?: return
+        
+        binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        
         c.sendKeyEvent(0xFFE3, true)   // Ctrl_L
         c.sendKeyEvent(0xFFE9, true)   // Alt_L
         c.sendKeyEvent(0xFFFF, true)   // Delete
@@ -273,14 +338,25 @@ class VNCActivity : AppCompatActivity() {
     private fun startResourceMonitor() {
         lifecycleScope.launch {
             while (isActive) {
-                val runtime = Runtime.getRuntime()
-                val usedMemMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-                val maxMemMb = runtime.maxMemory() / (1024 * 1024)
-
-                val isRunning = if (vmId != -1L) QemuManager.isRunning(vmId) else true
-                val statusText = if (isRunning) "ВМ активна" else "Остановлена"
-                binding.tvResourceMonitor.text = "ОЗУ: ${usedMemMb}MB / ${maxMemMb}MB [$statusText]"
-
+                if (monitorPort != -1 && client?.isConnected == true) {
+                    val status = QemuManager.executeMonitorCommand(monitorPort, "info status")
+                    val balloon = QemuManager.executeMonitorCommand(monitorPort, "info balloon")
+                    
+                    val isRunning = status.contains("running")
+                    val statusText = if (isRunning) "Active" else "Paused"
+                    
+                    var memText = "--MB"
+                    if (balloon.contains("actual=")) {
+                        val mb = balloon.substringAfter("actual=").trim().split(" ").firstOrNull()
+                        memText = "${mb}MB"
+                    }
+                    
+                    binding.tvResourceMonitor.text = "State: $statusText | Mem: $memText"
+                } else {
+                    val isRunning = if (vmId != -1L) QemuManager.isRunning(vmId) else true
+                    val statusText = if (isRunning) "Active" else "Stopped"
+                    binding.tvResourceMonitor.text = "State: $statusText"
+                }
                 delay(2000)
             }
         }

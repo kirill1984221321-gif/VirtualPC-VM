@@ -42,6 +42,53 @@ class MainActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("virtualpcvm_prefs", MODE_PRIVATE) }
     private lateinit var adapter: VmAdapter
 
+    private val importFileLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            importFiles(uris)
+        }
+    }
+
+    private fun importFiles(uris: List<android.net.Uri>) {
+        Toast.makeText(this, "Начинаем импорт ${uris.size} файлов...", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val qemuDir = File(filesDir, "qemu-bins")
+                if (!qemuDir.exists()) qemuDir.mkdirs()
+                
+                val importedPaths = mutableListOf<String>()
+
+                for (uri in uris) {
+                    var fileName = "imported_file_${System.currentTimeMillis()}"
+                    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (nameIndex != -1) fileName = cursor.getString(nameIndex)
+                        }
+                    }
+                    
+                    val destFile = File(qemuDir, fileName)
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        destFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    importedPaths.add(destFile.absolutePath)
+                }
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val joinedPaths = importedPaths.joinToString("\n")
+                    val clip = android.content.ClipData.newPlainText("QEMU Files", joinedPaths)
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+                    Toast.makeText(this@MainActivity, "Успешно импортировано файлов: ${uris.size}\nПути скопированы в буфер обмена!", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Ошибка импорта: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -63,10 +110,25 @@ class MainActivity : AppCompatActivity() {
             onRename = { cfg -> showRenameDialog(cfg) },
             onDelete = { cfg -> confirmDeleteVm(cfg) },
             onOptions = { cfg, anchor -> showCardPopupMenu(cfg, anchor) },
-            onShowLogs = { cfg -> showLogsDialog(cfg) }
+            onShowLogs = { cfg -> showLogsDialog(cfg) },
+            onLongClick = { cfg, anchor -> showCardPopupMenu(cfg, anchor) }
         )
         binding.recyclerVms.layoutManager = LinearLayoutManager(this)
         binding.recyclerVms.adapter = adapter
+
+        binding.searchView.setOnQueryTextListener(object : androidx.appcompat.widget.SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean = false
+            override fun onQueryTextChange(newText: String?): Boolean {
+                val filter = newText?.lowercase() ?: ""
+                if (filter.isEmpty()) {
+                    adapter.updateData(vms)
+                } else {
+                    val filtered = vms.filter { it.name.lowercase().contains(filter) }
+                    adapter.updateData(filtered)
+                }
+                return true
+            }
+        })
 
         binding.fabAddVm.setOnClickListener { showCreateDialog() }
 
@@ -197,10 +259,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
+        menu.add(0, 1001, 0, "Импорт файла (.iso/.qcow2)")
+            .setIcon(android.R.drawable.ic_menu_add)
+            .setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
         return true
     }
 
     override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        if (item.itemId == 1001) {
+            importFileLauncher.launch(arrayOf("*/*"))
+            return true
+        }
         return when (item.itemId) {
             R.id.action_download -> {
                 val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://distrowatch.com/"))
@@ -383,6 +452,7 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, VNCActivity::class.java).apply {
             putExtra(VNCActivity.EXTRA_HOST, "127.0.0.1")
             putExtra(VNCActivity.EXTRA_PORT, cfg.vncPort)
+            putExtra(VNCActivity.EXTRA_MONITOR_PORT, cfg.monitorPort)
             putExtra(VNCActivity.EXTRA_VM_NAME, cfg.name)
             putExtra(VNCActivity.EXTRA_VM_ID, cfg.id)
         })
@@ -778,15 +848,21 @@ class MainActivity : AppCompatActivity() {
 
 /* ── RecyclerView Adapter ── */
 class VmAdapter(
-    private val items: List<VmConfig>,
+    private var items: List<VmConfig>,
     private val onStart: (VmConfig) -> Unit,
     private val onEdit: (VmConfig) -> Unit,
     private val onStop: (VmConfig) -> Unit,
     private val onRename: (VmConfig) -> Unit,
     private val onDelete: (VmConfig) -> Unit,
     private val onOptions: (VmConfig, View) -> Unit,
-    private val onShowLogs: (VmConfig) -> Unit
+    private val onShowLogs: (VmConfig) -> Unit,
+    private val onLongClick: (VmConfig, View) -> Unit
 ) : RecyclerView.Adapter<VmAdapter.VH>() {
+
+    fun updateData(newItems: List<VmConfig>) {
+        this.items = newItems
+        notifyDataSetChanged()
+    }
 
     inner class VH(val b: ItemVmCardBinding) : RecyclerView.ViewHolder(b.root)
 
@@ -820,7 +896,7 @@ class VmAdapter(
             btnOptions.setOnClickListener { onOptions(cfg, it) }
             btnLogs.setOnClickListener { onShowLogs(cfg) }
             root.setOnLongClickListener {
-                onEdit(cfg)
+                onLongClick(cfg, it)
                 true
             }
         }

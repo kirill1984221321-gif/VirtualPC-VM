@@ -144,12 +144,19 @@ object QemuManager {
                         add("-netdev"); add("user,id=net0")
                         add("-device"); add("rtl8139,netdev=net0")
                     }
+                    
+                    add("-device"); add("virtio-balloon")
 
                     // Audio
                     if (cfg.enableAudio) {
                         add("-audiodev"); add("none,id=snd0")
                         val aModel = if (cfg.audioModel.isNotBlank()) cfg.audioModel else "AC97"
-                        add("-device"); add("$aModel,audiodev=snd0")
+                        if (aModel.lowercase() == "hda") {
+                            add("-device"); add("intel-hda")
+                            add("-device"); add("hda-micro,audiodev=snd0")
+                        } else {
+                            add("-device"); add("$aModel,audiodev=snd0")
+                        }
                     }
                 }
 
@@ -246,6 +253,9 @@ object QemuManager {
 
             // VNC display binding
             add("-vnc"); add("127.0.0.1:${cfg.vncDisplay}")
+            
+            // QEMU Monitor (HMP) binding for snapshots & stats
+            add("-monitor"); add("tcp:127.0.0.1:${cfg.monitorPort},server,nowait")
 
             // Custom extra arguments
             if (cfg.extraArgs.isNotBlank()) {
@@ -326,10 +336,16 @@ object QemuManager {
         var proc: Process
         val linker = getSystemLinker()
         try {
-            proc = preparePb(cmd).start()
+            if (android.os.Build.VERSION.SDK_INT >= 29 && linker != null) {
+                // Always use linker on Android 10+ to avoid SELinux W^X audit rate limits
+                val linkerCmd = listOf(linker) + cmd
+                proc = preparePb(linkerCmd).start()
+            } else {
+                proc = preparePb(cmd).start()
+            }
         } catch (e: java.io.IOException) {
             if (linker != null) {
-                onLog("[QEMU] Прямой запуск ограничен W^X (${e.message}). Запуск через системный линковщик $linker...")
+                onLog("[QEMU] Прямой запуск ограничен (${e.message}). Запуск через системный линковщик $linker...")
                 val linkerCmd = listOf(linker) + cmd
                 proc = preparePb(linkerCmd).start()
             } else {
@@ -385,7 +401,11 @@ object QemuManager {
     fun stop(vmId: Long) {
         val p = processes.remove(vmId) ?: return
         try {
-            p.destroy()
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                p.destroyForcibly()
+            } else {
+                p.destroy()
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Error stopping process: ${e.message}")
         }
@@ -501,6 +521,49 @@ object QemuManager {
         } catch (e: Exception) {
             onLog("Ошибка снапшота: ${e.message}")
             return@withContext false
+        }
+    }
+
+    suspend fun executeMonitorCommand(monitorPort: Int, command: String): String = withContext(Dispatchers.IO) {
+        try {
+            java.net.Socket().use { s ->
+                s.connect(java.net.InetSocketAddress("127.0.0.1", monitorPort), 2000)
+                s.soTimeout = 5000
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(s.getInputStream()))
+                val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(s.getOutputStream()))
+                
+                // Read until first "(qemu) "
+                val sb = StringBuilder()
+                var lastChars = ""
+                while (true) {
+                    val c = reader.read()
+                    if (c == -1) break
+                    val ch = c.toChar()
+                    lastChars += ch
+                    if (lastChars.length > 7) lastChars = lastChars.substring(1)
+                    if (lastChars == "(qemu) ") break
+                }
+                
+                writer.write("$command\n")
+                writer.flush()
+                
+                // Read response until next "(qemu) "
+                lastChars = ""
+                while (true) {
+                    val c = reader.read()
+                    if (c == -1) break
+                    val ch = c.toChar()
+                    sb.append(ch)
+                    lastChars += ch
+                    if (lastChars.length > 7) lastChars = lastChars.substring(1)
+                    if (lastChars == "(qemu) ") break
+                }
+                
+                val output = sb.toString()
+                return@withContext output.removeSuffix("(qemu) ").trim()
+            }
+        } catch (e: Exception) {
+            return@withContext "Error: ${e.message}"
         }
     }
 }

@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId = "com.aistudio.virtualpcvm.krll"
         minSdk = 26
-        targetSdk = 28
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
