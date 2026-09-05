@@ -2,14 +2,16 @@
 
 **VirtualPC-VM** is an advanced, high-performance, and lightweight PC emulator application built natively for Android devices. Powered by a customized mobile deployment of **QEMU (Quick Emulator)**, this project empowers users to engineer standalone Micro-Virtual Machines (MicroVMs) and boot fully fledged desktop or server operating systems—including various Linux distributions, Windows, and lightweight retro platforms—directly from `.iso`, `.qcow2`, `.img`, or `.vhd` disk images.
 
-The entire system design, native binary compatibility bridging, and core state management architecture of this application have been heavily co-developed, patched, and debugged using autonomous **Multi-Step AI Agents** driving continuous continuous integration, self-correction loops, and strict automated quality control.
+The entire system design, native binary compatibility bridging, and core state management architecture of this application have been heavily co-developed, patched, and debugged using autonomous **Multi-Step AI Agents** driving continuous integration, self-correction loops, and strict automated quality control.
 
 ---
 
 ## 📸 Project Visuals & Screenshots
 *The mobile emulator successfully initializing and booting straight into the native iPXE Boot environment and BIOS sequence inside an isolated Android application runtime container:*
 
----
+<img width="668" height="1253" alt="Screenshot_2026_0905_112031" src="https://github.com/user-attachments/assets/f4410038-4963-428a-9c6f-9697aee400b9" />
+
+      
 
 ## ✨ Comprehensive Feature Matrix
 
@@ -68,8 +70,25 @@ VirtualPC-VM/
 
 ---
 
+## 👑 Project Development Status
+* 🧑‍💻 **One-Man Project:** This entire emulator application is designed, built, and actively maintained by a **single standalone developer**. Because of this, progress takes time, and bugs are handled sequentially. Your patience and feedback are highly appreciated!
+* 🛑 **Environment Routing Disclaimer:** Unlike alternative virtualization setups, VirtualPC-VM **does NOT** default to or rely on the internal Termux home directory paths. All core configuration states, ISO images, and virtual storage devices are routed strictly through standard sandboxed directories and the public local Downloads directory (`/sdcard/Download/`).
+* ⚡ **Performance Benchmarking:** Internal systemic performance metrics and stress tests have not been officially benchmarked yet. Users may experience variance in hardware execution cycles depending on their mobile SoC capabilities.
+
+---
+
 ## ⚠️ Known Constraints & Technical Caveats
 * **Experimental VNC Subsystem:** While the underlying screen-loop execution crash is resolved, heavy desktop interface tasks can produce visual frame latency or artifact indexing over the local network bridge. For optimal interactive fluid speeds, launching a secondary **External VNC Client** routing directly into your specified port is highly recommended.
+
+---
+
+## 🤝 Acknowledgments & Credits
+
+This project stands on the shoulders of giants. Special thanks to the open-source upstream software and communities that made VirtualPC-VM possible:
+
+* **[QEMU Project](https://qemu.org)** — For providing the phenomenal, hyper-flexible machine emulation and virtualization engine core.
+* **[Termux Community](https://termux.dev)** — For their foundational research, environment patch records, and packages that paved the way for running native Linux binaries smoothly under Android system environments.
+* **[LibVNCServer / LibVNCClient](https://libvnc.github.io/)** — For the crucial cross-platform RFB protocol implementations powering the framebuffer screen outputs.
 
 ---
 
@@ -79,7 +98,7 @@ Follow these precise steps to get your virtual system running:
 
 1. Navigate directly to the right-hand panel of this repository and open the **[Releases](https://github.com/kirill1984221321-gif/VirtualPC-VM/releases/)** tab.
 2. Locate and download the latest compiled application binary asset package: `app-release.apk`.
-3. Install the APK package on any compatible target device running **Android 12 or newer**.
+3. Install the APK package on any compatible target device running **additionally Android 12 or newer**.
 4. Launch the application launcher, configure a new virtual machine card (assigning memory and cores), and click **Start VM**. The backend daemon will safely unpack the binary infrastructure and initiate the boot sequencing immediately into the iPXE console framework.
 
 ---
@@ -94,12 +113,16 @@ Follow these precise steps to get your virtual system running:
 * 🛠️ Полная кросс-архитектурная поддержка бинарных модулей под `aarch64`, `x86_64`, `armv7`, `x86`.
 * 📺 Успешное устранение критического бага бесконечного зависания экрана («*Infinite VNC Connection*»).
 * 📊 Удобная панель логирования QEMU потоков в реальном времени и пакетный импорт тяжелых ISO файлов.
-* ⚠️ **Примечание по стабильности:** Встроенный в приложение графический VNC-просмотрщик работает стабильно в консольном режиме, но для тяжелых графических оболочек рекомендуется подключаться через внешние сторонние VNC-клиенты.
+* 🧑‍💻 **Разработка силами одного человека:** Проект создаётся и полируется в соло, поэтому фиксы выходят по мере возможностей.
+* 🛑 **Никаких путей Termux:** Приложение работает полностью автономно и ищет образы ОС в стандартной папке `Загрузки` (`/sdcard/Download/`), не забивая системные папки эмуляторов терминала.
+* ⚡ **Тестирование системы:** Полноценные тесты производительности и стабильности (performance benchmarks) на разных процессорах ещё не проводились. Скорость работы эмуляции зависит от мощности чипсета вашего смартфона.
+
+### 🤝 Благодарности авторам:
+Выражается огромная благодарность разработчикам проекта **QEMU** за мощный движок виртуализации, сообществу **Termux** за неоценимый вклад в адаптацию и сборку системных Linux-компонентов под Android, а также создателям библиотек **VNC** за реализацию сетевого вывода экрана.
 
 ---
 
 ## 🤝 Open-Source Contributing and Code Standards
 Contributions regarding QEMU process optimization flags, memory optimizations, or native C/C++ cross-compilation enhancements for mobile chipsets are welcome. Feel free to open detailed bug reports inside the **Issues** tab or submit structure-compliant **Pull Requests**!
 
-*Main Project Maintainer & Developer: [@kirill1984221321-gif](https://github.com)*
-<img width="668" height="1253" alt="Screenshot_2026_0905_112031" src="https://github.com/user-attachments/assets/1f04f22b-97c6-4747-8688-3f37ef261476" />
+*Main Project Maintainer & Developer: [@kirill1984221321-gif](https://github.com/kirill1984221321-gif)*
