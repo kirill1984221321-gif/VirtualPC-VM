@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Material You / Material 3 Indigo Palette -->
+    <color name="primary">#4F6DFF</color>
     <color name="md_primary">#4F6DFF</color>
     <color name="md_on_primary">#FFFFFF</color>
     <color name="md_primary_container">#DDE1FF</color>

@@ -18,6 +18,10 @@ class InstallActivity : AppCompatActivity() {
     private lateinit var binding: ActivityInstallBinding
     private var installing = false
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.applySavedLocale(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityInstallBinding.inflate(layoutInflater)

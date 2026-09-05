@@ -16,8 +16,13 @@ private const val TAG = "QemuManager"
 object QemuManager {
 
     private val processes = ConcurrentHashMap<Long, Process>()
+    private val activeConfigs = ConcurrentHashMap<Long, VmConfig>()
     private val vmLogs = ConcurrentHashMap<Long, MutableList<String>>()
     private val vmExitCodes = ConcurrentHashMap<Long, Int>()
+
+    fun getRunningVmIds(): Set<Long> = processes.keys.toSet()
+    fun getProcess(vmId: Long): Process? = processes[vmId]
+    fun getVmConfig(vmId: Long): VmConfig? = activeConfigs[vmId]
 
     fun isRunning(vmId: Long): Boolean {
         val p = processes[vmId] ?: return false
@@ -50,6 +55,12 @@ object QemuManager {
             return appBin.absolutePath
         }
 
+        val customBin = File(ctx.filesDir, "qemu-bins/$name")
+        if (customBin.exists()) {
+            customBin.setExecutable(true, false)
+            return customBin.absolutePath
+        }
+
         val nativeDir = ctx.applicationInfo.nativeLibraryDir
         val nativeBin = File(nativeDir, name)
         if (nativeBin.exists() && nativeBin.canExecute()) return nativeBin.absolutePath
@@ -68,11 +79,15 @@ object QemuManager {
             bin.setExecutable(true, false)
             return bin.absolutePath
         }
+        val customBin = File(ctx.filesDir, "qemu-bins/qemu-img")
+        if (customBin.exists()) {
+            customBin.setExecutable(true, false)
+            return customBin.absolutePath
+        }
         return null
     }
 
-    fun getSystemLinker(): String? {
-        val is64 = android.os.Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()
+    fun getSystemLinker(is64: Boolean = android.os.Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()): String? {
         val paths = if (is64) {
             listOf("/system/bin/linker64", "/apex/com.android.runtime/bin/linker64", "/system/bin/bootstrap/linker64")
         } else {
@@ -135,14 +150,27 @@ object QemuManager {
                         add("-vga"); add(cfg.vgaDriver)
                     }
                     add("-usb")
-                    if (cfg.enableUsbTablet) {
-                        add("-device"); add("usb-tablet")
+                    when (cfg.inputDevice) {
+                        "usb-tablet" -> { add("-device"); add("usb-tablet") }
+                        "virtio-tablet" -> { add("-device"); add("virtio-tablet-pci") }
+                        "usb-mouse" -> { add("-device"); add("usb-mouse") }
+                        "ps2" -> { /* PS/2 standard controller */ }
+                        else -> {
+                            if (cfg.enableUsbTablet) {
+                                add("-device"); add("usb-tablet")
+                            }
+                        }
                     }
 
                     // Network
-                    if (cfg.networkMode == "user") {
+                    if (cfg.networkMode == "user" && cfg.networkAdapter != "none") {
                         add("-netdev"); add("user,id=net0")
-                        add("-device"); add("rtl8139,netdev=net0")
+                        val netCard = when (cfg.networkAdapter) {
+                            "virtio-net-pci", "virtio" -> "virtio-net-pci"
+                            "e1000" -> "e1000"
+                            else -> "rtl8139"
+                        }
+                        add("-device"); add("$netCard,netdev=net0")
                     }
                     
                     add("-device"); add("virtio-balloon")
@@ -301,6 +329,7 @@ object QemuManager {
         onLog: (String) -> Unit
     ): Process = withContext(Dispatchers.IO) {
         stop(cfg.id)
+        activeConfigs[cfg.id] = cfg
 
         val cmd = buildCommand(ctx, cfg)
         Log.i(TAG, "Command: ${cmd.joinToString(" ")}")
@@ -316,50 +345,65 @@ object QemuManager {
         val is64 = android.os.Build.SUPPORTED_64_BIT_ABIS.isNotEmpty()
         val sysLib = if (is64) "/system/lib64:/apex/com.android.runtime/lib64" else "/system/lib:/apex/com.android.runtime/lib"
 
+        val envMap = mapOf(
+            "LD_LIBRARY_PATH" to "$libDir:$libDir/qemu:$nativeDir:$sysLib",
+            "PATH" to "$termuxPrefix/bin:/system/bin",
+            "TMPDIR" to ctx.cacheDir.absolutePath,
+            "HOME" to termuxPrefix,
+            "PREFIX" to termuxPrefix,
+            "TERMUX_PREFIX" to termuxPrefix,
+            "XDG_RUNTIME_DIR" to ctx.cacheDir.absolutePath,
+            "ANDROID_DATA" to "/data",
+            "ANDROID_ROOT" to "/system"
+        )
+
         fun preparePb(commandList: List<String>): ProcessBuilder {
             val pb = ProcessBuilder(commandList)
             val env = pb.environment()
-            env["LD_LIBRARY_PATH"] = "$libDir:$libDir/qemu:$nativeDir:$sysLib"
-            env["PATH"] = "$termuxPrefix/bin:/system/bin"
-            env["TMPDIR"] = ctx.cacheDir.absolutePath
-            env["HOME"] = termuxPrefix
-            env["PREFIX"] = termuxPrefix
-            env["TERMUX_PREFIX"] = termuxPrefix
-            env["XDG_RUNTIME_DIR"] = ctx.cacheDir.absolutePath
-            env["ANDROID_DATA"] = "/data"
-            env["ANDROID_ROOT"] = "/system"
+            env.putAll(envMap)
             pb.directory(ctx.filesDir)
             pb.redirectErrorStream(true)
             return pb
         }
 
+        // Ensure binary file has execute permissions
+        try {
+            File(cmd.first()).setExecutable(true, false)
+        } catch (_: Exception) {}
+
+        val linker = getSystemLinker(is64)
+        QemuLogger.logStartup(ctx, cfg, cmd, envMap, linker)
+
         var proc: Process
-        val linker = getSystemLinker()
+        var usedLinker = false
+
         try {
             if (android.os.Build.VERSION.SDK_INT >= 29 && linker != null) {
-                // Always use linker on Android 10+ to avoid SELinux W^X audit rate limits
-                val linkerCmd = listOf(linker) + cmd
-                proc = preparePb(linkerCmd).start()
+                // On Android 10+, use linker directly to satisfy W^X
+                proc = preparePb(listOf(linker) + cmd).start()
+                usedLinker = true
             } else {
                 proc = preparePb(cmd).start()
             }
         } catch (e: java.io.IOException) {
-            if (linker != null) {
+            if (linker != null && !usedLinker) {
                 onLog("[QEMU] Прямой запуск ограничен (${e.message}). Запуск через системный линковщик $linker...")
-                val linkerCmd = listOf(linker) + cmd
-                proc = preparePb(linkerCmd).start()
+                QemuLogger.log(ctx, cfg.id, QemuLogger.LogEntry.Level.WARNING, "Direct start failed (${e.message}), using linker $linker")
+                proc = preparePb(listOf(linker) + cmd).start()
+                usedLinker = true
             } else {
+                QemuLogger.log(ctx, cfg.id, QemuLogger.LogEntry.Level.ERROR, "Startup execution failure: ${e.message}")
                 throw e
             }
         }
 
-        // Quick self-check: if process failed instantly (e.g. exit code 127/139), retry via linker
+        // Verification check: if process died immediately and we didn't use linker yet, try linker once
         try {
             Thread.sleep(200)
-            if (!proc.isAlive && proc.exitValue() != 0 && linker != null) {
+            if (!proc.isAlive && proc.exitValue() != 0 && linker != null && !usedLinker) {
                 onLog("[QEMU] Прямой запуск завершился с кодом ${proc.exitValue()}. Попытка запуска через $linker...")
-                val linkerCmd = listOf(linker) + cmd
-                proc = preparePb(linkerCmd).start()
+                QemuLogger.log(ctx, cfg.id, QemuLogger.LogEntry.Level.WARNING, "Process died with code ${proc.exitValue()}, trying via $linker")
+                proc = preparePb(listOf(linker) + cmd).start()
             }
         } catch (_: Exception) {}
 
@@ -376,6 +420,7 @@ object QemuManager {
                             if (logList.size > 2000) logList.removeAt(0)
                             logList.add(l)
                         }
+                        QemuLogger.log(ctx, cfg.id, QemuLogger.LogEntry.Level.STDOUT, l)
                         onLog(l)
                     }
                 }
@@ -392,6 +437,7 @@ object QemuManager {
             }
             Log.i(TAG, exitMsg)
             synchronized(logList) { logList.add(exitMsg) }
+            QemuLogger.log(ctx, cfg.id, if (code == 0) QemuLogger.LogEntry.Level.INFO else QemuLogger.LogEntry.Level.ERROR, exitMsg)
             onLog(exitMsg)
         }.start()
 
@@ -399,6 +445,7 @@ object QemuManager {
     }
 
     fun stop(vmId: Long) {
+        activeConfigs.remove(vmId)
         val p = processes.remove(vmId) ?: return
         try {
             if (android.os.Build.VERSION.SDK_INT >= 26) {

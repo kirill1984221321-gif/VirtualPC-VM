@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #121418;
+            color: #E0E6ED;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            user-select: none;
+            padding: 8px 12px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: #8892B0;
+            margin-bottom: 6px;
+        }
+        .legend {
+            display: flex;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .dot-cpu { background: #3B82F6; box-shadow: 0 0 6px #3B82F6; }
+        .dot-ram { background: #10B981; box-shadow: 0 0 6px #10B981; }
+        svg {
+            width: 100%;
+            height: 160px;
+            overflow: visible;
+        }
+        .grid-line {
+            stroke: #232936;
+            stroke-width: 1;
+            stroke-dasharray: 3,3;
+        }
+        .axis-label {
+            fill: #64748B;
+            font-size: 9px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="chart-header">
+        <span>Real-time Utilization History (30s)</span>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot dot-cpu"></div><span>CPU %</span></div>
+            <div class="legend-item"><div class="legend-dot dot-ram"></div><span>RAM %</span></div>
+        </div>
+    </div>
+    <svg id="chart" viewBox="0 0 300 150">
+        <defs>
+            <linearGradient id="cpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.45"/>
+                <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.0"/>
+            </linearGradient>
+            <linearGradient id="ramGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#10B981" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="#10B981" stop-opacity="0.0"/>
+            </linearGradient>
+        </defs>
+        <!-- Grid Lines -->
+        <line x1="25" y1="20" x2="295" y2="20" class="grid-line"/>
+        <text x="5" y="23" class="axis-label">100%</text>
+
+        <line x1="25" y1="55" x2="295" y2="55" class="grid-line"/>
+        <text x="5" y="58" class="axis-label">75%</text>
+
+        <line x1="25" y1="90" x2="295" y2="90" class="grid-line"/>
+        <text x="5" y="93" class="axis-label">50%</text>
+
+        <line x1="25" y1="125" x2="295" y2="125" class="grid-line"/>
+        <text x="5" y="128" class="axis-label">25%</text>
+
+        <!-- Area and Line Paths for RAM -->
+        <path id="ramArea" fill="url(#ramGrad)"/>
+        <path id="ramLine" fill="none" stroke="#10B981" stroke-width="1.8"/>
+
+        <!-- Area and Line Paths for CPU -->
+        <path id="cpuArea" fill="url(#cpuGrad)"/>
+        <path id="cpuLine" fill="none" stroke="#3B82F6" stroke-width="2.2"/>
+    </svg>
+
+    <script>
+        const maxPoints = 25;
+        let cpuData = new Array(maxPoints).fill(0);
+        let ramData = new Array(maxPoints).fill(0);
+
+        function updateMetrics(cpu, ramUsed, ramTotal) {
+            let cpuVal = Math.max(0, Math.min(100, parseFloat(cpu) || 0));
+            let ramVal = 0;
+            if (ramTotal > 0) {
+                ramVal = Math.max(0, Math.min(100, (parseFloat(ramUsed) / parseFloat(ramTotal)) * 100));
+            }
+
+            cpuData.shift();
+            cpuData.push(cpuVal);
+
+            ramData.shift();
+            ramData.push(ramVal);
+
+            render();
+        }
+
+        function render() {
+            const startX = 25;
+            const endX = 295;
+            const startY = 135; // 0%
+            const topY = 15;    // 100%
+            const rangeY = startY - topY;
+            const stepX = (endX - startX) / (maxPoints - 1);
+
+            function buildPath(data) {
+                let points = data.map((val, idx) => {
+                    let x = startX + (idx * stepX);
+                    let y = startY - (val / 100 * rangeY);
+                    return {x, y};
+                });
+
+                let lineD = "M " + points[0].x + " " + points[0].y;
+                for (let i = 1; i < points.length; i++) {
+                    lineD += " L " + points[i].x + " " + points[i].y;
+                }
+
+                let areaD = lineD + " L " + points[points.length - 1].x + " " + startY + " L " + points[0].x + " " + startY + " Z";
+                return { lineD, areaD };
+            }
+
+            const cpuPaths = buildPath(cpuData);
+            document.getElementById("cpuLine").setAttribute("d", cpuPaths.lineD);
+            document.getElementById("cpuArea").setAttribute("d", cpuPaths.areaD);
+
+            const ramPaths = buildPath(ramData);
+            document.getElementById("ramLine").setAttribute("d", ramPaths.lineD);
+            document.getElementById("ramArea").setAttribute("d", ramPaths.areaD);
+        }
+
+        render();
+    </script>
+</body>
+</html>

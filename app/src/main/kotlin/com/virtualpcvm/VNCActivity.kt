@@ -1,6 +1,11 @@
 package com.virtualpcvm
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -47,6 +52,10 @@ class VNCActivity : AppCompatActivity() {
     private var isAltActive = false
     private var isShiftActive = false
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.applySavedLocale(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -75,40 +84,47 @@ class VNCActivity : AppCompatActivity() {
         binding.btnRetryConnect.setOnClickListener { connect(host, port) }
 
         // Mouse mode toggle (Touch vs Trackpad)
+        binding.btnMouseMode.text = if (binding.vncView.isTouchMode) getString(R.string.vnc_touch_mode) else getString(R.string.vnc_mouse_mode)
         binding.btnMouseMode.setOnClickListener {
             val view = binding.vncView
             view.isTouchMode = !view.isTouchMode
-            binding.btnMouseMode.text = if (view.isTouchMode) "🖱 Тач" else "🖱 Мышь"
+            binding.btnMouseMode.text = if (view.isTouchMode) getString(R.string.vnc_touch_mode) else getString(R.string.vnc_mouse_mode)
             Toast.makeText(
                 this,
-                if (view.isTouchMode) "Режим: Сенсорный экран" else "Режим: Мышь / Курсор",
+                if (view.isTouchMode) getString(R.string.vnc_mode_touch_toast) else getString(R.string.vnc_mode_mouse_toast),
                 Toast.LENGTH_SHORT
             ).show()
         }
 
-        // PC Keyboard bar toggle
+        // Zoom and keyboard controls
+        binding.btnZoomIn.setOnClickListener { binding.vncView.zoomIn() }
+        binding.btnZoomOut.setOnClickListener { binding.vncView.zoomOut() }
+        binding.btnFitScreen.setOnClickListener { binding.vncView.fitToScreen() }
+        binding.btnSoftKeyboard.setOnClickListener { binding.vncView.toggleSoftKeyboard() }
+        binding.btnExternalVnc.setOnClickListener { openExternalVncOrStore() }
+
+        // PC Keyboard / Shortcuts helper toggle
         binding.btnToggleKeyboardBar.setOnClickListener {
-            val isVisible = binding.layoutPcKeyboardBar.visibility == View.VISIBLE
-            binding.layoutPcKeyboardBar.visibility = if (isVisible) View.GONE else View.VISIBLE
+            toggleShortcutsHelper()
+        }
+
+        binding.btnExpandShortcutsPill.setOnClickListener {
+            expandShortcutsHelper()
+        }
+
+        binding.btnCollapseShortcuts.setOnClickListener {
+            collapseShortcutsHelper()
         }
 
         binding.btnSaveSnapshot.setOnClickListener {
-            lifecycleScope.launch {
-                Toast.makeText(this@VNCActivity, "Сохранение состояния...", Toast.LENGTH_SHORT).show()
-                val result = QemuManager.executeMonitorCommand(monitorPort, "savevm auto_snap")
-                Toast.makeText(this@VNCActivity, if (result.contains("Error") || result.contains("failed")) result else "Состояние сохранено!", Toast.LENGTH_LONG).show()
-            }
+            showSnapshotDialog()
         }
 
         binding.btnLoadSnapshot.setOnClickListener {
-            lifecycleScope.launch {
-                Toast.makeText(this@VNCActivity, "Загрузка состояния...", Toast.LENGTH_SHORT).show()
-                val result = QemuManager.executeMonitorCommand(monitorPort, "loadvm auto_snap")
-                Toast.makeText(this@VNCActivity, if (result.contains("Error") || result.contains("failed")) result else "Состояние восстановлено!", Toast.LENGTH_LONG).show()
-            }
+            showSnapshotDialog()
         }
 
-        // Setup bottom PC Keyboard controls
+        // Setup bottom PC Keyboard & Shortcuts controls
         setupPcKeyboard()
 
         // Start connection & real-time monitoring
@@ -116,45 +132,69 @@ class VNCActivity : AppCompatActivity() {
         startResourceMonitor()
     }
 
-    private fun setupPcKeyboard() {
-        // Drag logic for the keyboard bar
-        var dX = 0f
-        var dY = 0f
-        binding.keyboardDragHandle.setOnTouchListener { _, event ->
-            val view = binding.layoutPcKeyboardBar
-            when (event.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    dX = view.x - event.rawX
-                    dY = view.y - event.rawY
-                    true
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val root = binding.root
-                    var newX = event.rawX + dX
-                    var newY = event.rawY + dY
+    private fun showSnapshotDialog() {
+        val vmConfig = VmRepository.getVm(this, vmId) ?: return
+        SnapshotDialogHelper.show(this, lifecycleScope, vmConfig)
+    }
 
-                    // Constrain within screen bounds
-                    val maxX = (root.width - view.width).toFloat().coerceAtLeast(0f)
-                    val maxY = (root.height - view.height).toFloat().coerceAtLeast(0f)
+    private fun expandShortcutsHelper() {
+        binding.btnExpandShortcutsPill.visibility = View.GONE
+        binding.layoutShortcutsHelper.visibility = View.VISIBLE
+    }
 
-                    newX = newX.coerceIn(0f, maxX)
-                    newY = newY.coerceIn(0f, maxY)
+    private fun collapseShortcutsHelper() {
+        binding.layoutShortcutsHelper.visibility = View.GONE
+        binding.btnExpandShortcutsPill.visibility = View.VISIBLE
+    }
 
-                    view.animate()
-                        .x(newX)
-                        .y(newY)
-                        .setDuration(0)
-                        .start()
-                    true
-                }
-                else -> false
-            }
+    private fun toggleShortcutsHelper() {
+        if (binding.layoutShortcutsHelper.visibility == View.VISIBLE) {
+            collapseShortcutsHelper()
+        } else {
+            expandShortcutsHelper()
         }
+    }
+
+    private fun updateMouseModeUI(isRelative: Boolean) {
+        val modeLabel = if (isRelative) getString(R.string.vnc_mouse_mode) else getString(R.string.vnc_touch_mode)
+        binding.btnMouseMode.text = modeLabel
+        binding.btnHelperMouseMode.text = modeLabel
+        binding.tvGesturesGuide.text = if (isRelative) {
+            getString(R.string.sc_mode_trackpad_desc)
+        } else {
+            getString(R.string.sc_mode_touch_desc)
+        }
+    }
+
+    private fun setupPcKeyboard() {
+        // Mode switch buttons
+        binding.btnMouseMode.setOnClickListener {
+            val newMode = !binding.vncView.isRelativeMouseMode
+            binding.vncView.setMouseMode(newMode)
+            updateMouseModeUI(newMode)
+            Toast.makeText(this, if (newMode) R.string.vnc_mode_mouse_toast else R.string.vnc_mode_touch_toast, Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnHelperMouseMode.setOnClickListener {
+            val newMode = !binding.vncView.isRelativeMouseMode
+            binding.vncView.setMouseMode(newMode)
+            updateMouseModeUI(newMode)
+            Toast.makeText(this, if (newMode) R.string.vnc_mode_mouse_toast else R.string.vnc_mode_touch_toast, Toast.LENGTH_SHORT).show()
+        }
+
+        // Shortcut command buttons
+        binding.btnShortcutCad.setOnClickListener { sendCtrlAltDel() }
+        binding.btnShortcutAltTab.setOnClickListener { sendCombo(listOf(0xFFE9, 0xFF09)) }
+        binding.btnShortcutAltF4.setOnClickListener { sendCombo(listOf(0xFFE9, 0xFFC1)) }
+        binding.btnShortcutWin.setOnClickListener { sendKey(0xFFEB) }
+        binding.btnShortcutCtrlEsc.setOnClickListener { sendCombo(listOf(0xFFE3, 0xFF1B)) }
+        binding.btnShortcutCopy.setOnClickListener { sendCombo(listOf(0xFFE3, 0x63)) }
+        binding.btnShortcutPaste.setOnClickListener { sendCombo(listOf(0xFFE3, 0x76)) }
+        binding.btnShortcutF11.setOnClickListener { sendKey(0xFFC8) }
 
         // Special single-press keys
         binding.keyEsc.setOnClickListener { sendKey(0xFF1B) }
         binding.keyTab.setOnClickListener { sendKey(0xFF09) }
-        binding.keyWin.setOnClickListener { sendKey(0xFFEB) }
         binding.keyEnter.setOnClickListener { sendKey(0xFF0D) }
         binding.keyBackspace.setOnClickListener { sendKey(0xFF08) }
 
@@ -200,34 +240,87 @@ class VNCActivity : AppCompatActivity() {
             popup.show()
         }
 
-        // Common shortcut combos
-        binding.keyCombos.setOnClickListener { v ->
-            val popup = PopupMenu(this, v)
-            popup.menu.add("Ctrl + Alt + Del")
-            popup.menu.add("Alt + F4")
-            popup.menu.add("Alt + Tab")
-            popup.menu.add("Ctrl + Esc (Пуск)")
-            popup.menu.add("Ctrl + C (Копировать)")
-            popup.menu.add("Ctrl + V (Вставить)")
-            popup.menu.add("Ctrl + Z (Отмена)")
-            popup.setOnMenuItemClickListener { item ->
-                when (item.title) {
-                    "Ctrl + Alt + Del" -> sendCtrlAltDel()
-                    "Alt + F4" -> sendCombo(listOf(0xFFE9, 0xFFC1))
-                    "Alt + Tab" -> sendCombo(listOf(0xFFE9, 0xFF09))
-                    "Ctrl + Esc (Пуск)" -> sendCombo(listOf(0xFFE3, 0xFF1B))
-                    "Ctrl + C (Копировать)" -> sendCombo(listOf(0xFFE3, 0x63))
-                    "Ctrl + V (Вставить)" -> sendCombo(listOf(0xFFE3, 0x76))
-                    "Ctrl + Z (Отмена)" -> sendCombo(listOf(0xFFE3, 0x7A))
-                }
-                true
-            }
-            popup.show()
-        }
-
         // Soft keyboard input button
         binding.keySoftKeyboard.setOnClickListener {
             toggleSoftKeyboard()
+        }
+
+        // External VNC button in top bar
+        binding.btnExternalVnc.setOnClickListener {
+            openExternalVncOrStore()
+        }
+
+        // Connection failure overlay actions
+        binding.btnOpenExternalVnc.setOnClickListener {
+            openExternalVncOrStore()
+        }
+
+        binding.btnRetryConnect.setOnClickListener {
+            connect(host, port)
+        }
+
+        binding.btnCopyVncAddress.setOnClickListener {
+            val addr = "127.0.0.1:$port"
+            val clip = ClipData.newPlainText("VNC Address", addr)
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+            Toast.makeText(this, "Адрес $addr скопирован", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnConnectionLogs.setOnClickListener {
+            toggleLogs()
+        }
+    }
+
+    private fun getInstalledVncPackage(): String? {
+        val pm = packageManager
+        val vncIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnc://127.0.0.1:$port"))
+        val resolved = pm.queryIntentActivities(vncIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        if (resolved.isNotEmpty()) {
+            return resolved.first().activityInfo.packageName
+        }
+        val knownPackages = listOf(
+            "com.realvnc.viewer.android",
+            "org.freedesktop.avnc",
+            "com.iiordanov.freebVNC",
+            "com.iiordanov.bVNC",
+            "com.undatech.opaque"
+        )
+        for (pkg in knownPackages) {
+            try {
+                pm.getPackageInfo(pkg, 0)
+                return pkg
+            } catch (_: PackageManager.NameNotFoundException) {}
+        }
+        return null
+    }
+
+    private fun openExternalVncOrStore() {
+        val pkg = getInstalledVncPackage()
+        val address = "127.0.0.1:$port"
+        val clip = ClipData.newPlainText("VNC Address", address)
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+
+        if (pkg != null) {
+            Toast.makeText(this, "Адрес скопирован ($address), запуск VNC Viewer...", Toast.LENGTH_SHORT).show()
+            val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+            if (launchIntent != null) {
+                startActivity(launchIntent)
+            } else {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("vnc://$address")))
+            }
+        } else {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Внешний VNC Viewer")
+                .setMessage("На устройстве не обнаружен сторонний VNC-клиент.\n\nАдрес сервера скопирован в буфер: $address\n\nЖелаете установить RealVNC Viewer из Google Play?")
+                .setPositiveButton("Установить RealVNC") { _, _ ->
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.realvnc.viewer.android")))
+                    } catch (_: Exception) {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.realvnc.viewer.android")))
+                    }
+                }
+                .setNegativeButton("Отмена", null)
+                .show()
         }
     }
 
@@ -284,9 +377,18 @@ class VNCActivity : AppCompatActivity() {
         client?.disconnect()
 
         binding.progressConnecting.visibility = View.VISIBLE
-        binding.btnRetryConnect.visibility = View.GONE
+        binding.layoutConnectionActions.visibility = View.GONE
         binding.tvStatus.visibility = View.VISIBLE
         binding.tvStatus.text = "Подключение к $host:$port..."
+
+        // Pre-configure external VNC button label
+        val hasExternalVnc = getInstalledVncPackage() != null
+        binding.btnOpenExternalVnc.text = if (hasExternalVnc) {
+            "Открыть в установленном VNC (RealVNC/bVNC)"
+        } else {
+            "Установить RealVNC Viewer (Google Play)"
+        }
+        binding.btnCopyVncAddress.text = "Скопировать $host:$port"
 
         val c = VncClient(host, port)
         c.isProcessAliveCheck = {
@@ -312,15 +414,18 @@ class VNCActivity : AppCompatActivity() {
             runOnUiThread {
                 binding.progressConnecting.visibility = View.GONE
                 binding.layoutConnecting.visibility = View.VISIBLE
-                binding.btnRetryConnect.visibility = View.VISIBLE
+                binding.layoutConnectionActions.visibility = View.VISIBLE
 
                 if (reason.startsWith("DIAGNOSTICS_FAILED:")) {
                     val msg = reason.substringAfter(":")
-                    binding.tvStatus.text = "Ошибка подключения к ВМ"
+                    binding.tvStatus.text = "Не удалось подключиться к VNC"
                     MaterialAlertDialogBuilder(this)
                         .setTitle("Диагностика соединения")
-                        .setMessage(msg)
-                        .setPositiveButton("Посмотреть логи") { _, _ ->
+                        .setMessage("$msg\n\nВы можете открыть внешний VNC Viewer или проверить лог консоли.")
+                        .setPositiveButton("Внешний VNC") { _, _ ->
+                            openExternalVncOrStore()
+                        }
+                        .setNeutralButton("Посмотреть логи") { _, _ ->
                             toggleLogs()
                         }
                         .setNegativeButton("Закрыть", null)
@@ -336,28 +441,19 @@ class VNCActivity : AppCompatActivity() {
     }
 
     private fun startResourceMonitor() {
+        // Start background service monitor loop if not already running
+        QemuMonitorService.startMonitoring(lifecycleScope)
+
         lifecycleScope.launch {
-            while (isActive) {
-                if (monitorPort != -1 && client?.isConnected == true) {
-                    val status = QemuManager.executeMonitorCommand(monitorPort, "info status")
-                    val balloon = QemuManager.executeMonitorCommand(monitorPort, "info balloon")
-                    
-                    val isRunning = status.contains("running")
-                    val statusText = if (isRunning) "Active" else "Paused"
-                    
-                    var memText = "--MB"
-                    if (balloon.contains("actual=")) {
-                        val mb = balloon.substringAfter("actual=").trim().split(" ").firstOrNull()
-                        memText = "${mb}MB"
-                    }
-                    
-                    binding.tvResourceMonitor.text = "State: $statusText | Mem: $memText"
+            QemuMonitorService.metricsMap.collect { map ->
+                val m = map[vmId]
+                if (m != null && m.isRunning) {
+                    binding.tvResourceMonitor.text = String.format("CPU: %.1f%% | RAM: %dMB", m.cpuPercent, m.ramUsedMb)
                 } else {
                     val isRunning = if (vmId != -1L) QemuManager.isRunning(vmId) else true
                     val statusText = if (isRunning) "Active" else "Stopped"
                     binding.tvResourceMonitor.text = "State: $statusText"
                 }
-                delay(2000)
             }
         }
     }
@@ -381,7 +477,12 @@ class VNCActivity : AppCompatActivity() {
 
     private fun updateLogs() {
         if (vmId == -1L || binding.layoutLogs.visibility != View.VISIBLE) return
-        val logs = QemuManager.getLogs(vmId).joinToString("<br>")
+        val rawLogs = QemuLogger.getLogs(this, vmId)
+        val logs = if (rawLogs.isNotEmpty()) {
+            rawLogs.joinToString("<br>")
+        } else {
+            QemuManager.getLogs(vmId).joinToString("<br>")
+        }
         binding.tvLogs.text = android.text.Html.fromHtml(
             if (logs.isBlank()) "Логи пусты. Процесс ещё не вывел сообщений." else logs,
             android.text.Html.FROM_HTML_MODE_COMPACT

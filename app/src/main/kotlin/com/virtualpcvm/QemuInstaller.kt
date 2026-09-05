@@ -91,17 +91,20 @@ object QemuInstaller {
                 else -> if (primaryAbi.contains("64")) "aarch64" else "arm"
             }
 
-            // Termux dropped official support for arm and i686. Use aarch64 via ARM translation if available.
-            if (hostArch == "arm" || hostArch == "i686") {
-                if (supportedAbis.contains("arm64-v8a")) {
-                    hostArch = "aarch64"
-                }
+            // Prefer 64-bit packages if the platform supports them (aarch64 or x86_64)
+            if (hostArch == "arm" && supportedAbis.contains("arm64-v8a")) {
+                hostArch = "aarch64"
+            } else if (hostArch == "i686" && supportedAbis.contains("x86_64")) {
+                hostArch = "x86_64"
             }
 
-            // Fallback for deprecated architectures
+            // Fallback for deprecated 32-bit architectures
             val isLegacyArch = hostArch == "arm" || hostArch == "i686"
             val mirrorsToTry = if (isLegacyArch) {
-                listOf("https://packages.termux.dev/apt/termux-main-21")
+                listOf(
+                    "https://packages.termux.dev/apt/termux-main-21",
+                    "https://grimler.se/termux/termux-main-21"
+                ) + REPO_MIRRORS
             } else {
                 REPO_MIRRORS
             }

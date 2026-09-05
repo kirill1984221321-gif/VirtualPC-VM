@@ -78,6 +78,14 @@
                 android:text="pc" />
         </LinearLayout>
 
+        <!-- Real-time metrics sparkline chart (visible when VM is active) -->
+        <com.virtualpcvm.MetricsChartView
+            android:id="@+id/chartMetrics"
+            android:layout_width="match_parent"
+            android:layout_height="76dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
         <!-- Row 3: quick actions bar -->
         <LinearLayout
             android:layout_width="match_parent"

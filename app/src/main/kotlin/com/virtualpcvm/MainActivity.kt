@@ -14,7 +14,9 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.RadioButton
 import android.widget.Spinner
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
@@ -23,8 +25,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
 import com.virtualpcvm.databinding.ActivityMainBinding
 import com.virtualpcvm.databinding.ItemVmCardBinding
@@ -89,11 +93,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.applySavedLocale(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
+
+        if (LocaleHelper.isFirstLaunch(this)) {
+            showLanguageDialog(isFirstLaunch = true)
+        }
 
         loadVms()
         checkStoragePermission()
@@ -132,96 +144,41 @@ class MainActivity : AppCompatActivity() {
 
         binding.fabAddVm.setOnClickListener { showCreateDialog() }
 
+        // Start QemuMonitorService background loop and update VM metrics in adapter
+        QemuMonitorService.startMonitoring(lifecycleScope)
+        lifecycleScope.launch {
+            QemuMonitorService.metricsMap.collect { map ->
+                adapter.updateMetrics(map)
+            }
+        }
+
         refreshQemuBanner()
         checkAndPromptInstall()
     }
 
     private fun saveVms() {
-        try {
-            val jsonArray = JSONArray()
-            for (vm in vms) {
-                val obj = JSONObject().apply {
-                    put("id", vm.id)
-                    put("name", vm.name)
-                    put("arch", vm.architecture.name)
-                    put("machine", vm.machineType.name)
-                    put("ram", vm.ramMb)
-                    put("cpu", vm.cpuCores)
-                    put("cpuModel", vm.cpuModel)
-                    put("disk", vm.diskPath)
-                    put("diskFormat", vm.diskFormat)
-                    put("iso", vm.isoPath)
-                    put("bootDevice", vm.bootDevice)
-                    put("vgaDriver", vm.vgaDriver)
-                    put("networkMode", vm.networkMode)
-                    put("audio", vm.enableAudio)
-                    put("audioModel", vm.audioModel)
-                    put("usbTablet", vm.enableUsbTablet)
-                    put("mtcg", vm.enableMtcg)
-                    put("kvm", vm.enableKvm)
-                    put("extraArgs", vm.extraArgs)
-                }
-                jsonArray.put(obj)
-            }
-            prefs.edit().putString("vms_list", jsonArray.toString()).apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving VMs", e)
-        }
+        VmRepository.saveAllVms(this, vms)
     }
 
     private fun loadVms() {
         vms.clear()
-        try {
-            val json = prefs.getString("vms_list", null)
-            if (json != null) {
-                val array = JSONArray(json)
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    vms.add(
-                        VmConfig(
-                            id = obj.optLong("id", System.currentTimeMillis() + i),
-                            name = obj.optString("name", "VM"),
-                            architecture = try {
-                                Architecture.valueOf(obj.optString("arch", Architecture.X86_64.name))
-                            } catch (_: Exception) { Architecture.X86_64 },
-                            machineType = try {
-                                MachineType.valueOf(obj.optString("machine", MachineType.PC.name))
-                            } catch (_: Exception) { MachineType.PC },
-                            ramMb = obj.optInt("ram", 1024),
-                            cpuCores = obj.optInt("cpu", 2),
-                            cpuModel = obj.optString("cpuModel", "max"),
-                            diskPath = obj.optString("disk", ""),
-                            diskFormat = obj.optString("diskFormat", "qcow2"),
-                            isoPath = obj.optString("iso", ""),
-                            bootDevice = obj.optString("bootDevice", "disk"),
-                            vgaDriver = obj.optString("vgaDriver", "std"),
-                            networkMode = obj.optString("networkMode", "user"),
-                            enableAudio = obj.optBoolean("audio", true),
-                            audioModel = obj.optString("audioModel", "hda"),
-                            enableUsbTablet = obj.optBoolean("usbTablet", true),
-                            enableMtcg = obj.optBoolean("mtcg", true),
-                            enableKvm = obj.optBoolean("kvm", false),
-                            extraArgs = obj.optString("extraArgs", "")
-                        )
-                    )
-                }
-            } else {
-                // Add friendly default template for quick start
-                vms.add(
-                    VmConfig(
-                        id = 1001L,
-                        name = "Alpine Linux (x86_64)",
-                        architecture = Architecture.X86_64,
-                        machineType = MachineType.PC,
-                        ramMb = 512,
-                        cpuCores = 2,
-                        cpuModel = "max"
-                    )
+        val loaded = VmRepository.getAllVms(this)
+        if (loaded.isNotEmpty()) {
+            vms.addAll(loaded)
+        } else {
+            // Add friendly default template for quick start
+            vms.add(
+                VmConfig(
+                    id = 1001L,
+                    name = "Alpine Linux (x86_64)",
+                    architecture = Architecture.X86_64,
+                    machineType = MachineType.PC,
+                    ramMb = 512,
+                    cpuCores = 2,
+                    cpuModel = "max"
                 )
-                saveVms()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading VMs", e)
+            )
+            saveVms()
         }
     }
 
@@ -271,6 +228,14 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         return when (item.itemId) {
+            R.id.action_guide -> {
+                UserGuideDialog.show(this)
+                true
+            }
+            R.id.action_language -> {
+                showLanguageDialog(isFirstLaunch = false)
+                true
+            }
             R.id.action_download -> {
                 val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://distrowatch.com/"))
                 startActivity(intent)
@@ -288,8 +253,82 @@ class MainActivity : AppCompatActivity() {
                 showSystemSettingsDialog()
                 true
             }
+            R.id.action_about -> {
+                showAboutDialog()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun showLanguageDialog(isFirstLaunch: Boolean) {
+        val currentLang = LocaleHelper.getLanguage(this)
+        var selectedLang = if (currentLang == LocaleHelper.LANG_EN) LocaleHelper.LANG_EN else LocaleHelper.LANG_RU
+
+        val view = layoutInflater.inflate(R.layout.dialog_language_select, null)
+        val cardRu = view.findViewById<MaterialCardView>(R.id.cardRussian)
+        val cardEn = view.findViewById<MaterialCardView>(R.id.cardEnglish)
+        val rbRu = view.findViewById<RadioButton>(R.id.rbRussian)
+        val rbEn = view.findViewById<RadioButton>(R.id.rbEnglish)
+
+        fun updateSelection() {
+            val isRu = selectedLang == LocaleHelper.LANG_RU
+            rbRu.isChecked = isRu
+            rbEn.isChecked = !isRu
+            val selectedColor = ContextCompat.getColor(this, R.color.primary)
+            val normalColor = ContextCompat.getColor(this, android.R.color.darker_gray)
+            cardRu.strokeColor = if (isRu) selectedColor else normalColor
+            cardEn.strokeColor = if (!isRu) selectedColor else normalColor
+        }
+
+        cardRu.setOnClickListener {
+            selectedLang = LocaleHelper.LANG_RU
+            updateSelection()
+        }
+        rbRu.setOnClickListener {
+            selectedLang = LocaleHelper.LANG_RU
+            updateSelection()
+        }
+        cardEn.setOnClickListener {
+            selectedLang = LocaleHelper.LANG_EN
+            updateSelection()
+        }
+        rbEn.setOnClickListener {
+            selectedLang = LocaleHelper.LANG_EN
+            updateSelection()
+        }
+        updateSelection()
+
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.lang_select_title)
+            .setView(view)
+            .setPositiveButton(R.string.lang_btn_confirm) { _, _ ->
+                LocaleHelper.setLanguage(this, selectedLang)
+            }
+
+        if (isFirstLaunch) {
+            builder.setCancelable(false)
+        } else {
+            builder.setNegativeButton(R.string.lang_btn_cancel, null)
+        }
+
+        builder.show()
+    }
+
+    private fun showAboutDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.menu_about)
+            .setMessage(
+                "Virtual PC (QEMU on Android)\n\n" +
+                "• QEMU Architectures: x86_64, aarch64, i386, arm\n" +
+                "• Built-in VNC Client with Direct Touch & Trackpad mode\n" +
+                "• Hardware acceleration & Multi-threaded TCG\n" +
+                "• Full snapshot support (qcow2)\n" +
+                "• Language: English / Русский\n" +
+                "• Version: 1.2.0"
+            )
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun showCleanupDialog() {
@@ -326,6 +365,15 @@ class MainActivity : AppCompatActivity() {
             setPadding(50, 40, 50, 20)
         }
 
+        val btnChangeLang = com.google.android.material.button.MaterialButton(this).apply {
+            val cur = if (LocaleHelper.getLanguage(this@MainActivity) == LocaleHelper.LANG_RU) "Русский" else "English"
+            text = "${getString(R.string.menu_language)}: $cur"
+            setOnClickListener {
+                showLanguageDialog(isFirstLaunch = false)
+            }
+        }
+        layout.addView(btnChangeLang)
+
         val swAutoInstall = MaterialSwitch(this).apply {
             text = "Авто-проверка пакетов QEMU при старте"
             isChecked = appSettings.getBoolean("auto_install", true)
@@ -338,6 +386,7 @@ class MainActivity : AppCompatActivity() {
 
         layout.addView(swAutoInstall)
         layout.addView(swCleanOnExit)
+
 
         MaterialAlertDialogBuilder(this)
             .setTitle("Системные параметры")
@@ -548,8 +597,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLogsDialog(cfg: VmConfig) {
-        val logs = QemuManager.getLogs(cfg.id)
-        val msg = if (logs.isEmpty()) "Журнал пуст. ВМ ещё не запускалась или не вывела сообщений." else logs.takeLast(100).joinToString("\n")
+        val rawLogs = QemuLogger.getLogs(this, cfg.id)
+        val logs = if (rawLogs.isNotEmpty()) rawLogs else QemuManager.getLogs(cfg.id)
+        val msg = if (logs.isEmpty()) "Журнал пуст. ВМ ещё не запускалась или не вывела сообщений." else logs.takeLast(200).joinToString("\n")
 
         val sv = android.widget.ScrollView(this).apply {
             setPadding(30, 20, 30, 10)
@@ -566,17 +616,57 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Логи ВМ «${cfg.name}»")
             .setView(sv)
             .setPositiveButton("Закрыть", null)
+            .setNeutralButton("Очистить логи") { _, _ ->
+                QemuLogger.clearLogs(this, cfg.id)
+                Toast.makeText(this, "Логи очищены", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Поделиться") { _, _ ->
+                val sendIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    putExtra(Intent.EXTRA_TEXT, msg)
+                    putExtra(Intent.EXTRA_TITLE, "Логи ${cfg.name}")
+                    type = "text/plain"
+                }
+                startActivity(Intent.createChooser(sendIntent, "Экспорт логов"))
+            }
             .show()
+    }
+
+    private fun shareVmConfig(cfg: VmConfig) {
+        val json = JSONObject().apply {
+            put("name", cfg.name)
+            put("ram", cfg.ramMb)
+            put("cpu", cfg.cpuCores)
+            put("cpuModel", cfg.cpuModel)
+            put("arch", cfg.architecture.name)
+            put("machine", cfg.machineType.name)
+            put("boot", cfg.bootDevice)
+            put("vga", cfg.vgaDriver)
+            put("net", cfg.networkMode)
+            put("audio", cfg.enableAudio)
+            put("kvm", cfg.enableKvm)
+            put("extraArgs", cfg.extraArgs)
+        }.toString(2)
+
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, json)
+            putExtra(Intent.EXTRA_TITLE, "Конфигурация ВМ ${cfg.name}")
+            type = "text/plain"
+        }
+        startActivity(Intent.createChooser(sendIntent, "Поделиться конфигурацией «${cfg.name}»"))
     }
 
     private fun showCardPopupMenu(cfg: VmConfig, anchor: View) {
         val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, 1, 0, "✏ Переименовать ВМ")
-        popup.menu.add(0, 2, 1, "⚙ Настройки параметров")
-        popup.menu.add(0, 3, 2, "📋 Дублировать ВМ")
-        popup.menu.add(0, 4, 3, "📸 Снапшоты (qcow2)")
-        popup.menu.add(0, 5, 4, "📜 Журнал вывода")
-        popup.menu.add(0, 6, 5, "🗑 Удалить ВМ")
+        popup.menu.add(0, 1, 0, "✏ " + getString(R.string.menu_rename))
+        popup.menu.add(0, 2, 1, "⚙ " + getString(R.string.menu_settings))
+        popup.menu.add(0, 3, 2, "📋 " + getString(R.string.menu_clone))
+        popup.menu.add(0, 4, 3, "📸 " + getString(R.string.menu_snapshots))
+        popup.menu.add(0, 5, 4, "📊 " + getString(R.string.menu_monitor))
+        popup.menu.add(0, 6, 5, "📜 " + getString(R.string.menu_logs))
+        popup.menu.add(0, 7, 6, "📤 " + getString(R.string.menu_share))
+        popup.menu.add(0, 8, 7, "🗑 " + getString(R.string.menu_delete))
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -584,8 +674,10 @@ class MainActivity : AppCompatActivity() {
                 2 -> showEditDialog(cfg)
                 3 -> cloneVm(cfg)
                 4 -> showSnapshotDialog(cfg)
-                5 -> showLogsDialog(cfg)
-                6 -> confirmDeleteVm(cfg)
+                5 -> SystemMonitorDialog.show(this, lifecycleScope, cfg)
+                6 -> showLogsDialog(cfg)
+                7 -> shareVmConfig(cfg)
+                8 -> confirmDeleteVm(cfg)
             }
             true
         }
@@ -595,9 +687,13 @@ class MainActivity : AppCompatActivity() {
     private fun showVmDialog(initial: VmConfig, onSave: (VmConfig) -> Unit) {
         val view = layoutInflater.inflate(R.layout.dialog_vm_form, null)
         val etName = view.findViewById<TextInputEditText>(R.id.etName)
-        val etRam = view.findViewById<TextInputEditText>(R.id.etRam)
-        val etCpu = view.findViewById<TextInputEditText>(R.id.etCpu)
+        val sliderRam = view.findViewById<Slider>(R.id.sliderRam)
+        val tvRamValue = view.findViewById<TextView>(R.id.tvRamValue)
+        val sliderCpu = view.findViewById<Slider>(R.id.sliderCpu)
+        val tvCpuValue = view.findViewById<TextView>(R.id.tvCpuValue)
         val etCpuModel = view.findViewById<TextInputEditText>(R.id.etCpuModel)
+        val sliderDiskSize = view.findViewById<Slider>(R.id.sliderDiskSize)
+        val tvDiskSizeValue = view.findViewById<TextView>(R.id.tvDiskSizeValue)
         val etDisk = view.findViewById<TextInputEditText>(R.id.etDisk)
         val etIso = view.findViewById<TextInputEditText>(R.id.etIso)
         val etExtraArgs = view.findViewById<TextInputEditText>(R.id.etExtraArgs)
@@ -606,25 +702,46 @@ class MainActivity : AppCompatActivity() {
         val spinMach = view.findViewById<Spinner>(R.id.spinMachine)
         val spinBoot = view.findViewById<Spinner>(R.id.spinBootDevice)
         val spinVga = view.findViewById<Spinner>(R.id.spinVga)
-        val spinNet = view.findViewById<Spinner>(R.id.spinNetwork)
+        val spinNetAdapter = view.findViewById<Spinner>(R.id.spinNetworkAdapter)
+        val spinInputDevice = view.findViewById<Spinner>(R.id.spinInputDevice)
 
         val switchAudio = view.findViewById<MaterialSwitch>(R.id.switchAudio)
         val switchKvm = view.findViewById<MaterialSwitch>(R.id.switchKvm)
-        val switchUsbTablet = view.findViewById<MaterialSwitch>(R.id.switchUsbTablet)
         val switchMtcg = view.findViewById<MaterialSwitch>(R.id.switchMtcg)
         val spinPreset = view.findViewById<Spinner>(R.id.spinPreset)
 
         etName.setText(initial.name)
-        etRam.setText(initial.ramMb.toString())
-        etCpu.setText(initial.cpuCores.toString())
         etCpuModel.setText(initial.cpuModel)
         etDisk.setText(initial.diskPath)
         etIso.setText(initial.isoPath)
         etExtraArgs.setText(initial.extraArgs)
 
+        // Setup RAM Slider
+        val curRam = initial.ramMb.coerceIn(128, 8192)
+        sliderRam.value = curRam.toFloat()
+        tvRamValue.text = "$curRam MB"
+        sliderRam.addOnChangeListener { _, value, _ ->
+            tvRamValue.text = "${value.toInt()} MB"
+        }
+
+        // Setup CPU Slider
+        val curCpu = initial.cpuCores.coerceIn(1, 8)
+        sliderCpu.value = curCpu.toFloat()
+        tvCpuValue.text = "$curCpu"
+        sliderCpu.addOnChangeListener { _, value, _ ->
+            tvCpuValue.text = "${value.toInt()}"
+        }
+
+        // Setup Disk Size Slider
+        val curDisk = (if (initial.diskSizeGb > 0) initial.diskSizeGb else 10).coerceIn(2, 128)
+        sliderDiskSize.value = curDisk.toFloat()
+        tvDiskSizeValue.text = "$curDisk GB"
+        sliderDiskSize.addOnChangeListener { _, value, _ ->
+            tvDiskSizeValue.text = "${value.toInt()} GB"
+        }
+
         switchAudio.isChecked = initial.enableAudio
         switchKvm.isChecked = initial.enableKvm
-        switchUsbTablet?.isChecked = initial.enableUsbTablet
         switchMtcg?.isChecked = initial.enableMtcg
 
         val archValues = Architecture.values()
@@ -635,7 +752,7 @@ class MainActivity : AppCompatActivity() {
         spinMach.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, machValues.map { "${it.value} (${it.displayName})" })
         spinMach.setSelection(machValues.indexOf(initial.machineType).coerceAtLeast(0))
 
-        val bootValues = listOf("Диск (HDD)", "CD-ROM (ISO)")
+        val bootValues = listOf(getString(R.string.vm_boot_hdd), getString(R.string.vm_boot_cdrom))
         spinBoot.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, bootValues)
         spinBoot.setSelection(if (initial.bootDevice == "cdrom") 1 else 0)
 
@@ -644,14 +761,30 @@ class MainActivity : AppCompatActivity() {
         spinVga.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, vgaValues)
         spinVga.setSelection(vgaKeys.indexOf(initial.vgaDriver).coerceAtLeast(0))
 
-        val netValues = listOf("Пользовательский NAT (rtl8139/virtio)", "Отключить сеть")
-        val netKeys = listOf("user", "none")
-        spinNet.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, netValues)
-        spinNet.setSelection(netKeys.indexOf(initial.networkMode).coerceAtLeast(0))
+        val netAdapters = listOf("rtl8139", "virtio-net-pci", "e1000", "ne2k_pci", "none")
+        val netAdapterLabels = listOf(
+            "rtl8139 (Universal, WinXP/7)",
+            "virtio-net-pci (High-Speed VirtIO)",
+            "e1000 (Intel PRO/1000)",
+            "ne2k_pci (Legacy 10Mbit)",
+            "none (Отключить сеть / Disable Network)"
+        )
+        spinNetAdapter.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, netAdapterLabels)
+        val initialNetIndex = if (initial.networkMode == "none") 4 else netAdapters.indexOf(initial.networkAdapter).coerceIn(0, 3)
+        spinNetAdapter.setSelection(initialNetIndex)
+
+        val inputDevices = listOf("usb-tablet", "virtio-tablet-pci", "ps2")
+        val inputDeviceLabels = listOf(
+            "USB Tablet (Touchscreen absolute coordinates)",
+            "VirtIO Tablet (Fast input)",
+            "PS/2 Mouse (Relative cursor)"
+        )
+        spinInputDevice.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, inputDeviceLabels)
+        spinInputDevice.setSelection(inputDevices.indexOf(initial.inputDevice).coerceAtLeast(0))
 
         // Preset selector logic
         val presets = listOf(
-            "Пользовательский",
+            "Пользовательский / Custom",
             "Windows XP (x86 32-bit)",
             "Windows 7 / 10 (x86_64)",
             "Windows 11 (x86_64 Q35)",
@@ -667,44 +800,79 @@ class MainActivity : AppCompatActivity() {
                     1 -> { // Win XP
                         spinArch.setSelection(archValues.indexOf(Architecture.I386))
                         spinMach.setSelection(machValues.indexOf(MachineType.PC))
-                        etRam.setText("512"); etCpu.setText("1"); etCpuModel.setText("pentium3")
+                        sliderRam.value = 512f; tvRamValue.text = "512 MB"
+                        sliderCpu.value = 1f; tvCpuValue.text = "1"
+                        sliderDiskSize.value = 10f; tvDiskSizeValue.text = "10 GB"
+                        etCpuModel.setText("pentium3")
                         spinVga.setSelection(0) // std
+                        spinNetAdapter.setSelection(0) // rtl8139
+                        spinInputDevice.setSelection(0) // usb-tablet
                     }
                     2 -> { // Win 7/10
                         spinArch.setSelection(archValues.indexOf(Architecture.X86_64))
                         spinMach.setSelection(machValues.indexOf(MachineType.Q35))
-                        etRam.setText("2048"); etCpu.setText("2"); etCpuModel.setText("max")
+                        sliderRam.value = 2048f; tvRamValue.text = "2048 MB"
+                        sliderCpu.value = 2f; tvCpuValue.text = "2"
+                        sliderDiskSize.value = 30f; tvDiskSizeValue.text = "30 GB"
+                        etCpuModel.setText("max")
                         spinVga.setSelection(0)
+                        spinNetAdapter.setSelection(2) // e1000
+                        spinInputDevice.setSelection(0) // usb-tablet
                     }
                     3 -> { // Win 11
                         spinArch.setSelection(archValues.indexOf(Architecture.X86_64))
                         spinMach.setSelection(machValues.indexOf(MachineType.Q35))
-                        etRam.setText("4096"); etCpu.setText("4"); etCpuModel.setText("max")
+                        sliderRam.value = 4096f; tvRamValue.text = "4096 MB"
+                        sliderCpu.value = 4f; tvCpuValue.text = "4"
+                        sliderDiskSize.value = 50f; tvDiskSizeValue.text = "50 GB"
+                        etCpuModel.setText("max")
                         spinVga.setSelection(0)
+                        spinNetAdapter.setSelection(2) // e1000
+                        spinInputDevice.setSelection(0) // usb-tablet
                     }
                     4 -> { // Ubuntu ARM64
                         spinArch.setSelection(archValues.indexOf(Architecture.ARM64))
                         spinMach.setSelection(machValues.indexOf(MachineType.VIRT))
-                        etRam.setText("2048"); etCpu.setText("2"); etCpuModel.setText("cortex-a57")
+                        sliderRam.value = 2048f; tvRamValue.text = "2048 MB"
+                        sliderCpu.value = 2f; tvCpuValue.text = "2"
+                        sliderDiskSize.value = 20f; tvDiskSizeValue.text = "20 GB"
+                        etCpuModel.setText("cortex-a57")
                         spinVga.setSelection(1) // virtio
+                        spinNetAdapter.setSelection(1) // virtio-net-pci
+                        spinInputDevice.setSelection(1) // virtio-tablet
                     }
                     5 -> { // Alpine Linux
                         spinArch.setSelection(archValues.indexOf(Architecture.X86_64))
                         spinMach.setSelection(machValues.indexOf(MachineType.PC))
-                        etRam.setText("512"); etCpu.setText("1"); etCpuModel.setText("max")
+                        sliderRam.value = 512f; tvRamValue.text = "512 MB"
+                        sliderCpu.value = 1f; tvCpuValue.text = "1"
+                        sliderDiskSize.value = 5f; tvDiskSizeValue.text = "5 GB"
+                        etCpuModel.setText("max")
                         spinVga.setSelection(0)
+                        spinNetAdapter.setSelection(1) // virtio-net-pci
+                        spinInputDevice.setSelection(0) // usb-tablet
                     }
                     6 -> { // RISC-V
                         spinArch.setSelection(archValues.indexOf(Architecture.RISCV64))
                         spinMach.setSelection(machValues.indexOf(MachineType.VIRT))
-                        etRam.setText("1024"); etCpu.setText("2"); etCpuModel.setText("max")
+                        sliderRam.value = 1024f; tvRamValue.text = "1024 MB"
+                        sliderCpu.value = 2f; tvCpuValue.text = "2"
+                        sliderDiskSize.value = 10f; tvDiskSizeValue.text = "10 GB"
+                        etCpuModel.setText("max")
                         spinVga.setSelection(1)
+                        spinNetAdapter.setSelection(1)
+                        spinInputDevice.setSelection(0)
                     }
                     7 -> { // Mac OS 9 PPC
                         spinArch.setSelection(archValues.indexOf(Architecture.POWERPC))
                         spinMach.setSelection(machValues.indexOf(MachineType.MAC99))
-                        etRam.setText("512"); etCpu.setText("1"); etCpuModel.setText("g4")
+                        sliderRam.value = 512f; tvRamValue.text = "512 MB"
+                        sliderCpu.value = 1f; tvCpuValue.text = "1"
+                        sliderDiskSize.value = 10f; tvDiskSizeValue.text = "10 GB"
+                        etCpuModel.setText("g4")
                         spinVga.setSelection(0)
+                        spinNetAdapter.setSelection(0)
+                        spinInputDevice.setSelection(2) // ps2
                     }
                 }
             }
@@ -714,81 +882,82 @@ class MainActivity : AppCompatActivity() {
         // Create Disk Button
         val btnCreateDisk = view.findViewById<View>(R.id.btnCreateDisk)
         btnCreateDisk.setOnClickListener {
-            val layout = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(40, 20, 40, 0)
-            }
-            val input = EditText(this).apply {
-                inputType = InputType.TYPE_CLASS_NUMBER
-                hint = "Размер в ГБ (например 10)"
-                setText("10")
-            }
-            val spinFormat = Spinner(this)
-            val formats = listOf("qcow2", "raw")
-            spinFormat.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, formats)
+            val sizeGb = sliderDiskSize.value.toInt()
+            val disksDir = File(filesDir, "disks").also { it.mkdirs() }
+            val diskFile = File(disksDir, "disk_${System.currentTimeMillis()}.qcow2")
 
-            layout.addView(input)
-            layout.addView(spinFormat)
-
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Создать виртуальный диск")
-                .setView(layout)
-                .setPositiveButton("Создать") { _, _ ->
-                    val sizeGb = input.text.toString().toIntOrNull() ?: 10
-                    val format = formats[spinFormat.selectedItemPosition]
-                    val disksDir = File(filesDir, "disks").also { it.mkdirs() }
-                    val diskFile = File(disksDir, "disk_${System.currentTimeMillis()}.$format")
-
-                    lifecycleScope.launch {
-                        Toast.makeText(this@MainActivity, "Создание диска $sizeGb ГБ...", Toast.LENGTH_SHORT).show()
-                        val ok = QemuManager.createDiskImage(this@MainActivity, diskFile, sizeGb, format) { log ->
-                            Log.d("QEMU_IMG", log)
-                        }
-                        if (ok) {
-                            etDisk.setText(diskFile.absolutePath)
-                            Toast.makeText(this@MainActivity, "Диск создан: ${diskFile.name}", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(this@MainActivity, "Ошибка создания диска", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+            lifecycleScope.launch {
+                Toast.makeText(this@MainActivity, "Создание qcow2 диска $sizeGb ГБ...", Toast.LENGTH_SHORT).show()
+                val ok = QemuManager.createDiskImage(this@MainActivity, diskFile, sizeGb, "qcow2") { log ->
+                    Log.d("QEMU_IMG", log)
                 }
-                .setNegativeButton("Отмена", null)
-                .show()
+                if (ok) {
+                    etDisk.setText(diskFile.absolutePath)
+                    Toast.makeText(this@MainActivity, "Диск создан: ${diskFile.name}", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MainActivity, "Ошибка создания диска", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
 
         // Select ISO Button
         val btnSelectIso = view.findViewById<View>(R.id.btnSelectIso)
         btnSelectIso.setOnClickListener {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Выбор ISO образа")
-                .setMessage("Укажите абсолютный путь к файлу ISO, например:\n/storage/emulated/0/Download/os.iso\n\nИли поместите ISO в папку приложения:\n${getExternalFilesDir(null)?.absolutePath}")
-                .setPositiveButton("Понятно", null)
-                .show()
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val appDir = getExternalFilesDir(null)
+            val filesList = mutableListOf<File>()
+            appDir?.listFiles { f -> f.name.endsWith(".iso", true) || f.name.endsWith(".img", true) }?.let { filesList.addAll(it) }
+            downloadsDir?.listFiles { f -> f.name.endsWith(".iso", true) || f.name.endsWith(".img", true) }?.let { filesList.addAll(it) }
+
+            if (filesList.isNotEmpty()) {
+                val names = filesList.map { "${it.name} (${it.length() / (1024 * 1024)} MB)" }.toTypedArray()
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.menu_import_iso)
+                    .setItems(names) { _, which ->
+                        etIso.setText(filesList[which].absolutePath)
+                    }
+                    .setNeutralButton("Файловый менеджер") { _, _ ->
+                        importFileLauncher.launch(arrayOf("*/*"))
+                    }
+                    .setNegativeButton(R.string.lang_btn_cancel, null)
+                    .show()
+            } else {
+                importFileLauncher.launch(arrayOf("*/*"))
+            }
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle(if (initial.id == 0L || initial.name == "Новая ВМ") "Параметры новой ВМ" else "Настройки «${initial.name}»")
+            .setTitle(if (initial.id == 0L || initial.name == "Новая ВМ") getString(R.string.vm_title_new) else "${getString(R.string.menu_settings)} «${initial.name}»")
             .setView(view)
-            .setPositiveButton("Сохранить") { _, _ ->
+            .setPositiveButton(R.string.vm_btn_save) { _, _ ->
                 val chosenArch = archValues[spinArch.selectedItemPosition]
                 val chosenMach = machValues[spinMach.selectedItemPosition]
                 val chosenBoot = if (spinBoot.selectedItemPosition == 1) "cdrom" else "disk"
                 val chosenVga = vgaKeys[spinVga.selectedItemPosition]
-                val chosenNet = netKeys[spinNet.selectedItemPosition]
+                val chosenNetItem = netAdapters[spinNetAdapter.selectedItemPosition]
+                val (chosenNetMode, chosenNetAdapter) = if (chosenNetItem == "none") {
+                    Pair("none", "rtl8139")
+                } else {
+                    Pair("user", chosenNetItem)
+                }
+                val chosenInputDevice = inputDevices[spinInputDevice.selectedItemPosition]
 
                 onSave(
                     initial.copy(
                         name = etName.text.toString().trim().ifBlank { "ВМ" },
-                        ramMb = etRam.text.toString().toIntOrNull() ?: 1024,
-                        cpuCores = etCpu.text.toString().toIntOrNull() ?: 2,
+                        ramMb = sliderRam.value.toInt(),
+                        cpuCores = sliderCpu.value.toInt(),
+                        diskSizeGb = sliderDiskSize.value.toInt(),
                         cpuModel = etCpuModel.text.toString().trim().ifBlank { "max" },
                         architecture = chosenArch,
                         machineType = chosenMach,
                         bootDevice = chosenBoot,
                         vgaDriver = chosenVga,
-                        networkMode = chosenNet,
+                        networkMode = chosenNetMode,
+                        networkAdapter = chosenNetAdapter,
+                        inputDevice = chosenInputDevice,
                         enableAudio = switchAudio.isChecked,
-                        enableUsbTablet = switchUsbTablet?.isChecked ?: true,
+                        enableUsbTablet = chosenInputDevice == "usb-tablet",
                         enableMtcg = switchMtcg?.isChecked ?: true,
                         enableKvm = switchKvm.isChecked,
                         diskPath = etDisk.text.toString().trim(),
@@ -797,52 +966,14 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
             }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton(R.string.lang_btn_cancel, null)
             .show()
     }
 
     private fun showSnapshotDialog(cfg: VmConfig) {
-        if (!cfg.diskPath.endsWith(".qcow2")) {
-            Toast.makeText(this, "Снапшоты поддерживаются только для дисков формата qcow2", Toast.LENGTH_LONG).show()
-            return
+        SnapshotDialogHelper.show(this, lifecycleScope, cfg) {
+            loadVms()
         }
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 20, 40, 0)
-        }
-
-        val input = EditText(this).apply {
-            hint = "Имя снапшота (например snap1)"
-        }
-        layout.addView(input)
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Снапшоты (qcow2)")
-            .setView(layout)
-            .setPositiveButton("Создать") { _, _ ->
-                val name = input.text.toString().trim()
-                if (name.isNotBlank()) {
-                    lifecycleScope.launch {
-                        val ok = QemuManager.manageSnapshot(this@MainActivity, File(cfg.diskPath), name, "-c") { log ->
-                            Log.d("QEMU_SNAP", log)
-                        }
-                        Toast.makeText(this@MainActivity, if (ok) "Снапшот создан" else "Ошибка создания", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            .setNegativeButton("Восстановить") { _, _ ->
-                val name = input.text.toString().trim()
-                if (name.isNotBlank()) {
-                    lifecycleScope.launch {
-                        val ok = QemuManager.manageSnapshot(this@MainActivity, File(cfg.diskPath), name, "-a") { log ->
-                            Log.d("QEMU_SNAP", log)
-                        }
-                        Toast.makeText(this@MainActivity, if (ok) "Снапшот восстановлен" else "Ошибка отката", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            .setNeutralButton("Отмена", null)
-            .show()
     }
 }
 
@@ -859,6 +990,20 @@ class VmAdapter(
     private val onLongClick: (VmConfig, View) -> Unit
 ) : RecyclerView.Adapter<VmAdapter.VH>() {
 
+    var metricsMap: Map<Long, QemuMonitorService.Companion.VmMetrics> = emptyMap()
+
+    fun updateMetrics(newMap: Map<Long, QemuMonitorService.Companion.VmMetrics>) {
+        this.metricsMap = newMap
+        // Only notify items where metrics or running status actually apply
+        items.indices.forEach { index ->
+            notifyItemChanged(index, PAYLOAD_METRICS)
+        }
+    }
+
+    companion object {
+        private const val PAYLOAD_METRICS = "payload_metrics"
+    }
+
     fun updateData(newItems: List<VmConfig>) {
         this.items = newItems
         notifyDataSetChanged()
@@ -870,6 +1015,25 @@ class VmAdapter(
         VH(ItemVmCardBinding.inflate(LayoutInflater.from(parent.context), parent, false))
 
     override fun getItemCount() = items.size
+
+    override fun onBindViewHolder(holder: VH, pos: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(PAYLOAD_METRICS)) {
+            val cfg = items[pos]
+            val running = QemuManager.isRunning(cfg.id)
+            val metric = metricsMap[cfg.id]
+            holder.b.apply {
+                if (running && metric != null && metric.isRunning) {
+                    chartMetrics.visibility = View.VISIBLE
+                    chartMetrics.updateMetrics(metric.cpuPercent, metric.ramUsedMb, metric.ramTotalMb, true)
+                } else {
+                    chartMetrics.visibility = View.GONE
+                    chartMetrics.clearMetrics()
+                }
+            }
+        } else {
+            super.onBindViewHolder(holder, pos, payloads)
+        }
+    }
 
     override fun onBindViewHolder(holder: VH, pos: Int) {
         val cfg = items[pos]
@@ -886,6 +1050,17 @@ class VmAdapter(
             chipStatus.setChipBackgroundColorResource(
                 if (running) R.color.chip_running else R.color.chip_stopped
             )
+
+            // Real-time metrics sparkline chart
+            val metric = metricsMap[cfg.id]
+            if (running && metric != null && metric.isRunning) {
+                chartMetrics.visibility = View.VISIBLE
+                chartMetrics.updateMetrics(metric.cpuPercent, metric.ramUsedMb, metric.ramTotalMb, true)
+            } else {
+                chartMetrics.visibility = View.GONE
+                chartMetrics.clearMetrics()
+            }
+
             btnStart.isEnabled = !running
             btnStop.isEnabled = running
             btnStart.setOnClickListener { onStart(cfg) }

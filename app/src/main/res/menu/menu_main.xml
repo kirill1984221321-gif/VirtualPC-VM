@@ -2,19 +2,34 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:id="@+id/action_download"
-        android:title="Скачать образы (ISO)"
-        app:showAsAction="never" />
+        android:id="@+id/action_guide"
+        android:title="@string/menu_guide"
+        android:icon="@android:drawable/ic_menu_help"
+        app:showAsAction="ifRoom" />
     <item
-        android:id="@+id/action_cleanup"
-        android:title="Очистка памяти"
+        android:id="@+id/action_language"
+        android:title="@string/menu_language"
+        android:icon="@android:drawable/ic_menu_agenda"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_download"
+        android:title="@string/menu_import_iso"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_install"
-        android:title="Менеджер QEMU"
+        android:title="@string/menu_qemu_status"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_cleanup"
+        android:title="Очистка памяти / Memory cleanup"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_settings"
-        android:title="Системные настройки"
+        android:title="@string/menu_settings"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_about"
+        android:title="@string/menu_about"
         app:showAsAction="never" />
 </menu>
+

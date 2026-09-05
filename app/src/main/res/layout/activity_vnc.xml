@@ -18,13 +18,14 @@
     <!-- Connecting overlay -->
     <LinearLayout
         android:id="@+id/layoutConnecting"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
         android:layout_gravity="center"
         android:orientation="vertical"
         android:gravity="center"
         android:padding="24dp"
-        android:background="#B3000000">
+        android:background="@drawable/bg_search">
 
         <ProgressBar
             android:id="@+id/progressConnecting"
@@ -42,14 +43,47 @@
             android:textAlignment="center"
             android:text="Подключение к QEMU VNC..." />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnRetryConnect"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="wrap_content"
+        <!-- Troubleshooting action buttons -->
+        <LinearLayout
+            android:id="@+id/layoutConnectionActions"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="vertical"
             android:layout_marginTop="16dp"
             android:visibility="gone"
-            android:text="Повторить подключение" />
+            android:gravity="center_horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRetryConnect"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="Повторить подключение" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpenExternalVnc"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="Открыть в RealVNC / внешнем приложении" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCopyVncAddress"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="Скопировать 127.0.0.1:port" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnConnectionLogs"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Посмотреть логи QEMU" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Top Toolbar overlay -->
@@ -58,10 +92,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:background="#D9121212"
+        android:background="#E6121212"
         android:orientation="horizontal"
-        android:paddingHorizontal="6dp"
-        android:paddingVertical="4dp"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="2dp"
         android:gravity="center_vertical">
 
         <com.google.android.material.button.MaterialButton
@@ -69,130 +103,30 @@
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:text="← Назад"
+            android:text="←"
+            android:textSize="16sp"
             android:textColor="#E0E0E0"
             android:minWidth="0dp"
             android:paddingHorizontal="6dp" />
 
         <TextView
             android:id="@+id/tvTitle"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end"
             android:paddingHorizontal="4dp"
             android:text="Virtual PC" />
 
-        <TextView
-            android:id="@+id/tvResourceMonitor"
-            android:layout_width="wrap_content"
+        <HorizontalScrollView
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textColor="#80D8FF"
-            android:fontFamily="monospace"
-            android:textSize="11sp"
-            android:text="CPU: --% RAM: --MB"
-            android:layout_marginEnd="6dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveSnapshot"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="💾"
-            android:textColor="#E0E0E0"
-            android:minWidth="0dp"
-            android:paddingHorizontal="4dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLoadSnapshot"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="📂"
-            android:textColor="#E0E0E0"
-            android:minWidth="0dp"
-            android:paddingHorizontal="4dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnMouseMode"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="🖱 Тач"
-            android:textColor="#E0E0E0"
-            android:minWidth="0dp"
-            android:paddingHorizontal="6dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnToggleKeyboardBar"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="⌨ PC Клв"
-            android:textColor="#E0E0E0"
-            android:minWidth="0dp"
-            android:paddingHorizontal="6dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLogs"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="Логи"
-            android:textColor="#E0E0E0"
-            android:minWidth="0dp"
-            android:paddingHorizontal="6dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnStop"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="🛑 Стоп"
-            android:textColor="#FF5252"
-            android:minWidth="0dp"
-            android:paddingHorizontal="6dp" />
-
-    </LinearLayout>
-
-    <!-- Draggable PC Keyboard Overlay -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/layoutPcKeyboardBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="48dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="#CC1A1A1A"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:strokeWidth="1dp"
-        app:strokeColor="#33FFFFFF">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
-
-            <!-- Drag Handle -->
-            <View
-                android:id="@+id/keyboardDragHandle"
-                android:layout_width="40dp"
-                android:layout_height="4dp"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="8dp"
-                android:background="@drawable/drag_handle_bg" />
-
-            <!-- Row 1: Functions -->
-            <HorizontalScrollView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:scrollbars="none">
+            android:layout_weight="1"
+            android:scrollbars="none"
+            android:fillViewport="false">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -200,173 +134,515 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
 
+                <TextView
+                    android:id="@+id/tvResourceMonitor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#80D8FF"
+                    android:fontFamily="monospace"
+                    android:textSize="10sp"
+                    android:text="CPU: --% RAM: --MB"
+                    android:layout_marginHorizontal="6dp" />
+
+                <!-- Zoom Controls -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyEsc"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:id="@+id/btnZoomIn"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="44dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Esc"
-                    android:textSize="12sp" />
+                    android:text="🔍+"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyTab"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:id="@+id/btnZoomOut"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="44dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Tab"
-                    android:textSize="12sp" />
+                    android:text="🔍-"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyCtrl"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:id="@+id/btnFitScreen"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="48dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Ctrl"
-                    android:textSize="12sp" />
+                    android:text="⛶ Fit"
+                    android:textColor="#80D8FF"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
+
+                <!-- Soft keyboard toggle -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSoftKeyboard"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="⌨ IME"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
+
+                <!-- Touch / Trackpad mouse mode -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMouseMode"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="@string/vnc_touch_mode"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
+
+                <!-- External VNC Launcher -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnExternalVnc"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="@string/vnc_external_button"
+                    android:textColor="#80D8FF"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
+
+                <!-- Save / Load Snapshots -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveSnapshot"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="💾"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyAlt"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:id="@+id/btnLoadSnapshot"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="44dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Alt"
-                    android:textSize="12sp" />
+                    android:text="📂"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
 
+                <!-- PC Keyboard Bar Toggle -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyShift"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:id="@+id/btnToggleKeyboardBar"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="48dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Shift"
-                    android:textSize="12sp" />
+                    android:text="@string/vnc_pc_keys"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
 
+                <!-- Logs -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyWin"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:id="@+id/btnLogs"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="44dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Win"
-                    android:textSize="12sp" />
+                    android:text="@string/btn_logs"
+                    android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
 
+                <!-- Stop VM -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyFKeys"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:id="@+id/btnStop"
+                    style="@style/Widget.Material3.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="48dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="F1-F12"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyCombos"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="56dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Ctrl+Alt+Del"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyUp"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="4dp"
-                    android:text="▲"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyDown"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="4dp"
-                    android:text="▼"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyLeft"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="4dp"
-                    android:text="◀"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyRight"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="4dp"
-                    android:text="▶"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyEnter"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="48dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Enter ↵"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keyBackspace"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="44dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="⌫ Del"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/keySoftKeyboard"
-                    style="@style/Widget.Material3.Button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:minWidth="44dp"
-                    android:paddingHorizontal="8dp"
-                    android:text="⌨ Ввод"
-                    android:textSize="12sp" />
-
+                    android:text="🛑"
+                    android:textColor="#FF5252"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
             </LinearLayout>
         </HorizontalScrollView>
+    </LinearLayout>
+
+    <!-- Persistent Collapsed Shortcuts Pill (visible when helper is closed) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/btnExpandShortcutsPill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="44dp"
+        app:cardBackgroundColor="#D91E242B"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="6dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="#55FFFFFF"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="7dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⌨"
+                android:textSize="14sp"
+                android:layout_marginEnd="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/sc_helper_expand"
+                android:textColor="#E0E6ED"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=" ▴"
+                android:textColor="#80D8FF"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Persistent Collapsible Shortcuts & Controls Helper Overlay -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/layoutShortcutsHelper"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginBottom="44dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#E6161B22"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="10dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="#44FFFFFF">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <!-- Drag & Header Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⌨"
+                    android:textSize="16sp"
+                    android:layout_marginEnd="6dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/sc_helper_title"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <!-- Capture Mode Toggle in Helper -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnHelperMouseMode"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:text="@string/vnc_touch_mode"
+                    android:textSize="11sp"
+                    android:paddingHorizontal="8dp"
+                    android:layout_marginEnd="6dp" />
+
+                <!-- Collapse button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCollapseShortcuts"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:text="✕"
+                    android:textColor="#8892B0"
+                    android:textSize="14sp"
+                    android:minWidth="32dp"
+                    android:paddingHorizontal="4dp" />
+            </LinearLayout>
+
+            <!-- Mode Explanation & Gestures Guide -->
+            <TextView
+                android:id="@+id/tvGesturesGuide"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#80D8FF"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/sc_mode_touch_desc"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Row 1: Quick Common Emulator Commands -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:layout_marginBottom="6dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutCad"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Ctrl+Alt+Del"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutAltTab"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Alt+Tab"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutAltF4"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Alt+F4"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutWin"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Win ❖"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutCtrlEsc"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Ctrl+Esc"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutCopy"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Ctrl+C"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutPaste"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Ctrl+V"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShortcutF11"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="F11 (Full)"
+                        android:textSize="11sp"
+                        android:paddingHorizontal="8dp"
+                        android:layout_marginEnd="4dp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <!-- Row 2: Standard Keyboard Controls -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyEsc"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="42dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="Esc"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyTab"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="42dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="Tab"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyCtrl"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="46dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="Ctrl"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyAlt"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="42dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="Alt"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyShift"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="46dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="Shift"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyFKeys"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="46dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="F1-F12"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyUp"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="2dp"
+                        android:minWidth="34dp"
+                        android:paddingHorizontal="2dp"
+                        android:text="▲"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyDown"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="2dp"
+                        android:minWidth="34dp"
+                        android:paddingHorizontal="2dp"
+                        android:text="▼"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyLeft"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="2dp"
+                        android:minWidth="34dp"
+                        android:paddingHorizontal="2dp"
+                        android:text="◀"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyRight"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="34dp"
+                        android:paddingHorizontal="2dp"
+                        android:text="▶"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyEnter"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="46dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="↵ Enter"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keyBackspace"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginEnd="3dp"
+                        android:minWidth="42dp"
+                        android:paddingHorizontal="4dp"
+                        android:text="⌫"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/keySoftKeyboard"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:minWidth="44dp"
+                        android:paddingHorizontal="6dp"
+                        android:text="⌨ IME"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
