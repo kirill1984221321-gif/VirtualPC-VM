@@ -32,6 +32,8 @@ object SystemMonitorDialog {
         val chipStatus = view.findViewById<Chip>(R.id.chipMonitorStatus)
         val tvCpu = view.findViewById<TextView>(R.id.tvMonitorCpuVal)
         val tvRam = view.findViewById<TextView>(R.id.tvMonitorRamVal)
+        val tvNet = view.findViewById<TextView>(R.id.tvMonitorNetVal)
+        val tvDisk = view.findViewById<TextView>(R.id.tvMonitorDiskVal)
         val tvDetails = view.findViewById<TextView>(R.id.tvMonitorDetails)
         val webView = view.findViewById<WebView>(R.id.wvMetricsChart)
 
@@ -67,6 +69,14 @@ object SystemMonitorDialog {
 
         dialog.show()
 
+        fun formatSpeed(kbps: Float): String {
+            return if (kbps >= 1024f) {
+                String.format(java.util.Locale.US, "%.1f MB/s", kbps / 1024f)
+            } else {
+                String.format(java.util.Locale.US, "%.1f KB/s", kbps)
+            }
+        }
+
         job = scope.launch {
             QemuMonitorService.metricsMap.collect { map ->
                 val m = map[vmConfig.id]
@@ -75,19 +85,32 @@ object SystemMonitorDialog {
                     chipStatus.text = if (isRunning) context.getString(R.string.status_running) else context.getString(R.string.status_stopped)
                     chipStatus.setChipBackgroundColorResource(if (isRunning) R.color.chip_running else R.color.chip_stopped)
 
-                    val cpu = m?.cpuPercent ?: 0.0
+                    val cpu = m?.cpuPercent ?: 0.0f
                     val ramUsed = m?.ramUsedMb ?: 0L
                     val ramTotal = vmConfig.ramMb
+                    val rx = m?.netRxKbps ?: 0.0f
+                    val tx = m?.netTxKbps ?: 0.0f
+                    val dr = m?.diskReadKbps ?: 0.0f
+                    val dw = m?.diskWriteKbps ?: 0.0f
 
-                    tvCpu.text = String.format("%.1f%%", cpu)
+                    tvCpu.text = String.format(java.util.Locale.US, "%.1f%%", cpu)
                     tvRam.text = "$ramUsed / $ramTotal MB"
+                    tvNet?.text = "⬇ ${formatSpeed(rx)} · ⬆ ${formatSpeed(tx)}"
+                    tvDisk?.text = "R: ${formatSpeed(dr)} · W: ${formatSpeed(dw)}"
 
                     val pid = if (m != null && m.pid > 0) m.pid.toString() else "--"
                     val threads = if (m != null && m.threads > 0) m.threads.toString() else "--"
                     tvDetails.text = "PID: $pid · Threads: $threads · VNC: 127.0.0.1:${vmConfig.vncPort} · Monitor: ${vmConfig.monitorPort}"
 
                     if (isWebReady) {
-                        webView.evaluateJavascript("updateMetrics($cpu, $ramUsed, $ramTotal);", null)
+                        webView.evaluateJavascript(
+                            String.format(
+                                java.util.Locale.US,
+                                "updateMetrics(%.1f, %d, %d, %.1f, %.1f, %.1f, %.1f);",
+                                cpu, ramUsed, ramTotal, rx, tx, dr, dw
+                            ),
+                            null
+                        )
                     }
                 }
             }

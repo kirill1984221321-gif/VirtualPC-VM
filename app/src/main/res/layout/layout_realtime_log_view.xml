@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="3dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="#121318">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Console Header Bar -->
+        <LinearLayout
+            android:id="@+id/headerLogBar"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp"
+            android:background="#1E1F25">
+
+            <!-- Live Status Pulse -->
+            <TextView
+                android:id="@+id/tvLiveIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="●"
+                android:textColor="#00E676"
+                android:textSize="14sp"
+                android:layout_marginEnd="6dp" />
+
+            <TextView
+                android:id="@+id/tvLogViewerTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="QEMU Консоль (Live Logs)"
+                android:textColor="#E3E1E9"
+                android:textStyle="bold"
+                android:textSize="13sp" />
+
+            <!-- VM Indicator Badge -->
+            <TextView
+                android:id="@+id/tvActiveVmBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_search"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp"
+                android:text="ВМ не запущена"
+                android:textColor="#9E9E9E"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:layout_marginEnd="6dp" />
+
+            <!-- Copy Logs Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCopyLogs"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="0dp"
+                app:icon="@android:drawable/ic_menu_share"
+                app:iconSize="16dp"
+                app:iconTint="#C6C5D0"
+                android:tooltipText="Копировать логи" />
+
+            <!-- Clear Logs Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnClearLogs"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:padding="0dp"
+                app:icon="@android:drawable/ic_menu_close_clear_cancel"
+                app:iconSize="16dp"
+                app:iconTint="#C6C5D0"
+                android:tooltipText="Очистить" />
+
+            <!-- Expand / Collapse Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggleLogs"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="▼ Свернуть"
+                android:textSize="11sp"
+                android:textColor="#80D8FF"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp" />
+        </LinearLayout>
+
+        <!-- Log Content Body -->
+        <LinearLayout
+            android:id="@+id/layoutLogBody"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:orientation="vertical">
+
+            <!-- Filter Chips Toolbar -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:background="#181920">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/chipGroupLogFilter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipFilterAll"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:text="Все"
+                        android:checked="true"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipFilterBoot"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:text="Загрузка / Init"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipFilterErrors"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:text="Ошибки"
+                        android:textColor="@color/color_error"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipFilterStdout"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:text="Консоль"
+                        android:textSize="11sp" />
+                </com.google.android.material.chip.ChipGroup>
+            </HorizontalScrollView>
+
+            <!-- Scrollable Log Output -->
+            <ScrollView
+                android:id="@+id/scrollLogs"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#0D0E12"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/tvConsoleLogs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textSize="11sp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="#B0BEC5"
+                    android:textIsSelectable="true"
+                    android:text="[QEMU Console ready. Запустите виртуальную машину для отслеживания вывода консоли в реальном времени.]" />
+            </ScrollView>
+
+            <!-- Footer: Autoscroll & Search hint -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="26dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="10dp"
+                android:background="#1E1F25">
+
+                <TextView
+                    android:id="@+id/tvLogStats"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Строк: 0"
+                    android:textColor="#90909A"
+                    android:textSize="10sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tvAutoScrollToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Автопрокрутка: ВКЛ"
+                    android:textColor="#80D8FF"
+                    android:textSize="10sp"
+                    android:paddingHorizontal="4dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

@@ -56,22 +56,54 @@ object SnapshotDialogHelper {
                             adapter = SnapshotAdapter(
                                 items = list,
                                 onRevert = { snap ->
+                                    ConfirmationDialogHelper.show(
+                                        context = context,
+                                        title = context.getString(R.string.snap_title),
+                                        message = context.getString(R.string.snap_revert_confirm, snap.tag),
+                                        details = "ВМ: ${vmConfig.name} · Снимок: ${snap.tag}",
+                                        actionType = ConfirmationDialogHelper.ActionType.REVERT_SNAPSHOT,
+                                        confirmText = context.getString(R.string.snap_revert)
+                                    ) {
+                                        progress.visibility = View.VISIBLE
+                                        scope.launch {
+                                            val res = SnapshotManager.revertSnapshot(context, vmConfig, snap.tag)
+                                            withContext(Dispatchers.Main) {
+                                                progress.visibility = View.GONE
+                                                if (res.isSuccess) {
+                                                    Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
+                                                    onStateChanged?.invoke()
+                                                } else {
+                                                    Toast.makeText(context, res.exceptionOrNull()?.message, Toast.LENGTH_LONG).show()
+                                                }
+                                                reloadList()
+                                            }
+                                        }
+                                    }
+                                },
+                                onRename = { snap ->
+                                    val input = android.widget.EditText(context).apply {
+                                        setText(snap.tag)
+                                        setSelection(snap.tag.length)
+                                        setPadding(40, 30, 40, 20)
+                                    }
                                     MaterialAlertDialogBuilder(context)
-                                        .setTitle(R.string.snap_title)
-                                        .setMessage(context.getString(R.string.snap_revert_confirm, snap.tag))
-                                        .setPositiveButton(R.string.snap_revert) { _, _ ->
-                                            progress.visibility = View.VISIBLE
-                                            scope.launch {
-                                                val res = SnapshotManager.revertSnapshot(context, vmConfig, snap.tag)
-                                                withContext(Dispatchers.Main) {
-                                                    progress.visibility = View.GONE
-                                                    if (res.isSuccess) {
-                                                        Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
-                                                        onStateChanged?.invoke()
-                                                    } else {
-                                                        Toast.makeText(context, res.exceptionOrNull()?.message, Toast.LENGTH_LONG).show()
+                                        .setTitle(context.getString(R.string.snap_rename_title, snap.tag))
+                                        .setView(input)
+                                        .setPositiveButton(R.string.vm_btn_save) { _, _ ->
+                                            val newName = input.text.toString().trim()
+                                            if (newName.isNotBlank() && newName != snap.tag) {
+                                                progress.visibility = View.VISIBLE
+                                                scope.launch {
+                                                    val res = SnapshotManager.renameSnapshot(context, vmConfig, snap.tag, newName)
+                                                    withContext(Dispatchers.Main) {
+                                                        progress.visibility = View.GONE
+                                                        if (res.isSuccess) {
+                                                            Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            Toast.makeText(context, res.exceptionOrNull()?.message, Toast.LENGTH_LONG).show()
+                                                        }
+                                                        reloadList()
                                                     }
-                                                    reloadList()
                                                 }
                                             }
                                         }
@@ -79,26 +111,28 @@ object SnapshotDialogHelper {
                                         .show()
                                 },
                                 onDelete = { snap ->
-                                    MaterialAlertDialogBuilder(context)
-                                        .setTitle(R.string.snap_title)
-                                        .setMessage(context.getString(R.string.snap_delete_confirm, snap.tag))
-                                        .setPositiveButton(R.string.snap_delete) { _, _ ->
-                                            progress.visibility = View.VISIBLE
-                                            scope.launch {
-                                                val res = SnapshotManager.deleteSnapshot(context, vmConfig, snap.tag)
-                                                withContext(Dispatchers.Main) {
-                                                    progress.visibility = View.GONE
-                                                    if (res.isSuccess) {
-                                                        Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
-                                                    } else {
-                                                        Toast.makeText(context, res.exceptionOrNull()?.message, Toast.LENGTH_LONG).show()
-                                                    }
-                                                    reloadList()
+                                    ConfirmationDialogHelper.show(
+                                        context = context,
+                                        title = context.getString(R.string.snap_title),
+                                        message = context.getString(R.string.snap_delete_confirm, snap.tag),
+                                        details = "Снимок: ${snap.tag} · VM: ${vmConfig.name}",
+                                        actionType = ConfirmationDialogHelper.ActionType.DELETE_SNAPSHOT,
+                                        confirmText = context.getString(R.string.snap_delete)
+                                    ) {
+                                        progress.visibility = View.VISIBLE
+                                        scope.launch {
+                                            val res = SnapshotManager.deleteSnapshot(context, vmConfig, snap.tag)
+                                            withContext(Dispatchers.Main) {
+                                                progress.visibility = View.GONE
+                                                if (res.isSuccess) {
+                                                    Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    Toast.makeText(context, res.exceptionOrNull()?.message, Toast.LENGTH_LONG).show()
                                                 }
+                                                reloadList()
                                             }
                                         }
-                                        .setNegativeButton(R.string.lang_btn_cancel, null)
-                                        .show()
+                                    }
                                 }
                             )
                             rv.adapter = adapter

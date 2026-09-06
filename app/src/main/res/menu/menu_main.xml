@@ -12,6 +12,18 @@
         android:icon="@android:drawable/ic_menu_agenda"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/action_export_configs"
+        android:title="@string/menu_export_configs"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_import_configs"
+        android:title="@string/menu_import_configs"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_shortcuts"
+        android:title="@string/menu_shortcuts_mapping"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_download"
         android:title="@string/menu_import_iso"
         app:showAsAction="never" />
@@ -24,6 +36,11 @@
         android:title="Очистка памяти / Memory cleanup"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_disk_manager"
+        android:title="Управление дисками / Disk Manager"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_settings"
         android:title="@string/menu_settings"
         app:showAsAction="never" />
@@ -32,4 +49,3 @@
         android:title="@string/menu_about"
         app:showAsAction="never" />
 </menu>
-

@@ -254,8 +254,8 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             android:hint="@string/hw_cpu_model"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-            <com.google.android.material.textfield.TextInputEditText
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+            <AutoCompleteTextView
                 android:id="@+id/etCpuModel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -433,6 +433,19 @@
             android:layout_height="48dp"
             android:layout_marginBottom="12dp" />
 
+        <!-- Mouse Positioning Mode (Absolute vs Relative) -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/hw_mouse_mode"
+            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+        <Spinner
+            android:id="@+id/spinMouseMode"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="12dp" />
+
         <!-- VGA Display Adapter -->
         <TextView
             android:layout_width="match_parent"
@@ -472,7 +485,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="6dp"
             android:hint="@string/hw_extra_args"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
             <com.google.android.material.textfield.TextInputEditText
@@ -481,6 +494,15 @@
                 android:layout_height="wrap_content"
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPickQemuFlags"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/hw_btn_presets"
+            app:icon="@android:drawable/ic_menu_agenda" />
 
     </LinearLayout>
 </ScrollView>

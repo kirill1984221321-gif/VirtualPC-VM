@@ -78,6 +78,35 @@
                 android:text="pc" />
         </LinearLayout>
 
+        <!-- Row 2.5: Disk storage usage & growth -->
+        <LinearLayout
+            android:id="@+id/layoutVmDiskStorage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp">
+
+            <TextView
+                android:id="@+id/tvVmDiskStorage"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:fontFamily="monospace"
+                android:textSize="11sp"
+                android:textColor="#80D8FF"
+                android:text="💽 Диск: 0 MB / 0 GB" />
+
+            <ProgressBar
+                android:id="@+id/pbVmDiskGrowth"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="80dp"
+                android:layout_height="6dp"
+                android:progress="0"
+                android:max="100"
+                android:progressTint="#80D8FF" />
+        </LinearLayout>
+
         <!-- Real-time metrics sparkline chart (visible when VM is active) -->
         <com.virtualpcvm.MetricsChartView
             android:id="@+id/chartMetrics"
@@ -129,6 +158,15 @@
                 android:minWidth="0dp"
                 android:paddingHorizontal="8dp"
                 android:text="Логи" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSnapshots"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="8dp"
+                android:text="Снапшоты" />
 
             <View
                 android:layout_width="0dp"

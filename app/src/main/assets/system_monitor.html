@@ -11,9 +11,9 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
             user-select: none;
-            padding: 8px 12px;
+            padding: 8px 10px;
         }
-        .chart-header {
+        .metrics-top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -21,106 +21,171 @@
             color: #8892B0;
             margin-bottom: 6px;
         }
+        .stats-badges {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #1B212C;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-family: monospace;
+            border: 1px solid #2B3444;
+        }
         .legend {
             display: flex;
-            gap: 12px;
+            gap: 10px;
+            font-size: 10px;
         }
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
         }
         .legend-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
         }
-        .dot-cpu { background: #3B82F6; box-shadow: 0 0 6px #3B82F6; }
-        .dot-ram { background: #10B981; box-shadow: 0 0 6px #10B981; }
+        .dot-cpu { background: #3B82F6; box-shadow: 0 0 5px #3B82F6; }
+        .dot-ram { background: #10B981; box-shadow: 0 0 5px #10B981; }
+        .dot-rx  { background: #06B6D4; box-shadow: 0 0 5px #06B6D4; }
+        .dot-tx  { background: #A855F7; box-shadow: 0 0 5px #A855F7; }
+
         svg {
             width: 100%;
-            height: 160px;
+            height: 135px;
             overflow: visible;
         }
         .grid-line {
-            stroke: #232936;
+            stroke: #202634;
             stroke-width: 1;
-            stroke-dasharray: 3,3;
+            stroke-dasharray: 2,2;
         }
         .axis-label {
             fill: #64748B;
-            font-size: 9px;
+            font-size: 8.5px;
             font-family: monospace;
         }
     </style>
 </head>
 <body>
-    <div class="chart-header">
-        <span>Real-time Utilization History (30s)</span>
+    <div class="metrics-top-bar">
+        <span>QEMU Real-time Telemetry (30s)</span>
         <div class="legend">
-            <div class="legend-item"><div class="legend-dot dot-cpu"></div><span>CPU %</span></div>
-            <div class="legend-item"><div class="legend-dot dot-ram"></div><span>RAM %</span></div>
+            <div class="legend-item"><div class="legend-dot dot-cpu"></div><span>CPU</span></div>
+            <div class="legend-item"><div class="legend-dot dot-ram"></div><span>RAM</span></div>
+            <div class="legend-item"><div class="legend-dot dot-rx"></div><span>RX</span></div>
+            <div class="legend-item"><div class="legend-dot dot-tx"></div><span>TX</span></div>
         </div>
     </div>
-    <svg id="chart" viewBox="0 0 300 150">
+
+    <!-- Live Network & Disk I/O KPI Row -->
+    <div class="stats-badges">
+        <div class="badge" style="color: #06B6D4;">⬇ RX: <span id="valRx">0.0 KB/s</span></div>
+        <div class="badge" style="color: #C084FC;">⬆ TX: <span id="valTx">0.0 KB/s</span></div>
+        <div class="badge" style="color: #FBBF24;">💽 Disk: <span id="valDisk">R:0 W:0 KB/s</span></div>
+    </div>
+
+    <svg id="chart" viewBox="0 0 300 120">
         <defs>
             <linearGradient id="cpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.45"/>
+                <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.35"/>
                 <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.0"/>
             </linearGradient>
             <linearGradient id="ramGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#10B981" stop-opacity="0.3"/>
+                <stop offset="0%" stop-color="#10B981" stop-opacity="0.25"/>
                 <stop offset="100%" stop-color="#10B981" stop-opacity="0.0"/>
             </linearGradient>
+            <linearGradient id="rxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#06B6D4" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#06B6D4" stop-opacity="0.0"/>
+            </linearGradient>
         </defs>
+
         <!-- Grid Lines -->
-        <line x1="25" y1="20" x2="295" y2="20" class="grid-line"/>
-        <text x="5" y="23" class="axis-label">100%</text>
+        <line x1="26" y1="12" x2="295" y2="12" class="grid-line"/>
+        <text x="4" y="15" class="axis-label">100%</text>
 
-        <line x1="25" y1="55" x2="295" y2="55" class="grid-line"/>
-        <text x="5" y="58" class="axis-label">75%</text>
+        <line x1="26" y1="42" x2="295" y2="42" class="grid-line"/>
+        <text x="4" y="45" class="axis-label">75%</text>
 
-        <line x1="25" y1="90" x2="295" y2="90" class="grid-line"/>
-        <text x="5" y="93" class="axis-label">50%</text>
+        <line x1="26" y1="72" x2="295" y2="72" class="grid-line"/>
+        <text x="4" y="75" class="axis-label">50%</text>
 
-        <line x1="25" y1="125" x2="295" y2="125" class="grid-line"/>
-        <text x="5" y="128" class="axis-label">25%</text>
+        <line x1="26" y1="102" x2="295" y2="102" class="grid-line"/>
+        <text x="4" y="105" class="axis-label">25%</text>
 
         <!-- Area and Line Paths for RAM -->
         <path id="ramArea" fill="url(#ramGrad)"/>
-        <path id="ramLine" fill="none" stroke="#10B981" stroke-width="1.8"/>
+        <path id="ramLine" fill="none" stroke="#10B981" stroke-width="1.6"/>
 
         <!-- Area and Line Paths for CPU -->
         <path id="cpuArea" fill="url(#cpuGrad)"/>
-        <path id="cpuLine" fill="none" stroke="#3B82F6" stroke-width="2.2"/>
+        <path id="cpuLine" fill="none" stroke="#3B82F6" stroke-width="2.0"/>
+
+        <!-- Net RX Line and Area -->
+        <path id="rxArea" fill="url(#rxGrad)"/>
+        <path id="rxLine" fill="none" stroke="#06B6D4" stroke-width="1.6" stroke-dasharray="4,2"/>
+
+        <!-- Net TX Line -->
+        <path id="txLine" fill="none" stroke="#A855F7" stroke-width="1.6"/>
     </svg>
 
     <script>
         const maxPoints = 25;
         let cpuData = new Array(maxPoints).fill(0);
         let ramData = new Array(maxPoints).fill(0);
+        let rxData = new Array(maxPoints).fill(0);
+        let txData = new Array(maxPoints).fill(0);
 
-        function updateMetrics(cpu, ramUsed, ramTotal) {
+        function formatSpeed(kbps) {
+            let val = parseFloat(kbps) || 0;
+            if (val >= 1024) {
+                return (val / 1024).toFixed(1) + " MB/s";
+            }
+            return val.toFixed(1) + " KB/s";
+        }
+
+        function updateMetrics(cpu, ramUsed, ramTotal, netRxKbps, netTxKbps, diskReadKbps, diskWriteKbps) {
             let cpuVal = Math.max(0, Math.min(100, parseFloat(cpu) || 0));
             let ramVal = 0;
             if (ramTotal > 0) {
                 ramVal = Math.max(0, Math.min(100, (parseFloat(ramUsed) / parseFloat(ramTotal)) * 100));
             }
 
-            cpuData.shift();
-            cpuData.push(cpuVal);
+            let rxVal = parseFloat(netRxKbps) || 0;
+            let txVal = parseFloat(netTxKbps) || 0;
+            let diskR = parseFloat(diskReadKbps) || 0;
+            let diskW = parseFloat(diskWriteKbps) || 0;
 
-            ramData.shift();
-            ramData.push(ramVal);
+            // Normalize network speeds for chart display (0 to 1000 KB/s map to 0-100%)
+            let rxNorm = Math.min(100, (rxVal / 500) * 100);
+            let txNorm = Math.min(100, (txVal / 500) * 100);
+
+            cpuData.shift(); cpuData.push(cpuVal);
+            ramData.shift(); ramData.push(ramVal);
+            rxData.shift();  rxData.push(rxNorm);
+            txData.shift();  txData.push(txNorm);
+
+            document.getElementById("valRx").innerText = formatSpeed(rxVal);
+            document.getElementById("valTx").innerText = formatSpeed(txVal);
+            document.getElementById("valDisk").innerText = "R:" + formatSpeed(diskR) + " W:" + formatSpeed(diskW);
 
             render();
         }
 
         function render() {
-            const startX = 25;
+            const startX = 26;
             const endX = 295;
-            const startY = 135; // 0%
-            const topY = 15;    // 100%
+            const startY = 110; // 0%
+            const topY = 10;    // 100%
             const rangeY = startY - topY;
             const stepX = (endX - startX) / (maxPoints - 1);
 
@@ -147,6 +212,13 @@
             const ramPaths = buildPath(ramData);
             document.getElementById("ramLine").setAttribute("d", ramPaths.lineD);
             document.getElementById("ramArea").setAttribute("d", ramPaths.areaD);
+
+            const rxPaths = buildPath(rxData);
+            document.getElementById("rxLine").setAttribute("d", rxPaths.lineD);
+            document.getElementById("rxArea").setAttribute("d", rxPaths.areaD);
+
+            const txPaths = buildPath(txData);
+            document.getElementById("txLine").setAttribute("d", txPaths.lineD);
         }
 
         render();

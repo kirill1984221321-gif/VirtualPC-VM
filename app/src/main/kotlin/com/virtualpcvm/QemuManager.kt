@@ -491,9 +491,12 @@ object QemuManager {
     ): Boolean = withContext(Dispatchers.IO) {
         diskFile.parentFile?.mkdirs()
         val qemuImg = findQemuImg(ctx)
+        var success = false
+
         if (qemuImg != null) {
             try {
-                val cmd = listOf(qemuImg, "create", "-f", format, diskFile.absolutePath, "${sizeGb}G")
+                File(qemuImg).setExecutable(true, false)
+                val cmd = listOf(qemuImg, "create", "-f", format.lowercase(), diskFile.absolutePath, "${sizeGb}G")
                 val pb = ProcessBuilder(cmd)
                 val termuxPrefix = QemuInstaller.termuxPrefix(ctx).absolutePath
                 val libDir = File(QemuInstaller.termuxPrefix(ctx), "lib").absolutePath
@@ -501,35 +504,62 @@ object QemuManager {
                 pb.environment()["PATH"] = "$termuxPrefix/bin:/system/bin"
                 pb.redirectErrorStream(true)
 
-                val proc = try {
-                    pb.start()
-                } catch (e: Exception) {
-                    val linker = getSystemLinker()
-                    if (linker != null) {
-                        ProcessBuilder(listOf(linker) + cmd).start()
-                    } else throw e
+                val linker = getSystemLinker()
+                val proc = if (android.os.Build.VERSION.SDK_INT >= 29 && linker != null) {
+                    ProcessBuilder(listOf(linker) + cmd).also {
+                        it.environment()["LD_LIBRARY_PATH"] = "$libDir:${ctx.applicationInfo.nativeLibraryDir}"
+                        it.environment()["PATH"] = "$termuxPrefix/bin:/system/bin"
+                        it.redirectErrorStream(true)
+                    }.start()
+                } else {
+                    try {
+                        pb.start()
+                    } catch (e: Exception) {
+                        if (linker != null) {
+                            ProcessBuilder(listOf(linker) + cmd).start()
+                        } else throw e
+                    }
                 }
 
                 proc.inputStream.bufferedReader().useLines { lines ->
                     lines.forEach { onLog(it) }
                 }
-                return@withContext (proc.waitFor() == 0)
+                success = (proc.waitFor() == 0)
+                if (success) {
+                    onLog("qemu-img: успешно создан диск ${diskFile.name} ($sizeGb ГБ, $format)")
+                    return@withContext true
+                }
             } catch (e: Exception) {
-                onLog("qemu-img error: ${e.message}")
+                onLog("qemu-img warning: ${e.message}. Использование встроенного генератора дисков...")
             }
         }
 
-        // Fallback for raw format via sparse file creation
+        // Reliable fallback for Android 10+ without external binary requirement
+        if (format.equals("qcow2", ignoreCase = true)) {
+            val created = Qcow2Writer.createQcow2Image(diskFile, sizeGb.toLong())
+            if (created) {
+                onLog("Создан образ QCOW2 v3 (встроенный модуль): ${diskFile.name} ($sizeGb ГБ)")
+                return@withContext true
+            } else {
+                onLog("Ошибка создания QCOW2 образа")
+            }
+        }
+
+        // Fallback for raw / img format via sparse file creation
         try {
             RandomAccessFile(diskFile, "rw").use { raf ->
                 raf.setLength(sizeGb.toLong() * 1024L * 1024L * 1024L)
             }
-            onLog("Диск создан (sparse file): ${diskFile.name} ($sizeGb ГБ)")
+            onLog("Создан образ RAW / Sparse file: ${diskFile.name} ($sizeGb ГБ)")
             return@withContext true
         } catch (e: Exception) {
             onLog("Ошибка создания файла диска: ${e.message}")
             return@withContext false
         }
+    }
+
+    fun inspectDisk(file: File): Qcow2Writer.DiskInfo {
+        return Qcow2Writer.inspectDisk(file)
     }
 
     suspend fun manageSnapshot(

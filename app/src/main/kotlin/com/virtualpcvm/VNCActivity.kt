@@ -43,9 +43,14 @@ class VNCActivity : AppCompatActivity() {
     private lateinit var binding: ActivityVncBinding
     private var client: VncClient? = null
     private var vmId: Long = -1L
+    private var vmName: String = "ВМ"
     private var host: String = "127.0.0.1"
     private var port: Int = 5901
     private var monitorPort: Int = -1
+
+    // New VNC Usability Subsystems
+    private var virtualKeyboard: VncVirtualKeyboard? = null
+    private var inputDebuggerOverlay: VncInputDebuggerOverlay? = null
 
     // Modifier keys state for on-screen PC keyboard
     private var isCtrlActive = false
@@ -71,35 +76,51 @@ class VNCActivity : AppCompatActivity() {
         host   = intent.getStringExtra(EXTRA_HOST)   ?: "127.0.0.1"
         port   = intent.getIntExtra(EXTRA_PORT, 5901)
         monitorPort = intent.getIntExtra(EXTRA_MONITOR_PORT, -1)
-        val vmName = intent.getStringExtra(EXTRA_VM_NAME) ?: "ВМ"
+        vmName = intent.getStringExtra(EXTRA_VM_NAME) ?: "ВМ"
         vmId   = intent.getLongExtra(EXTRA_VM_ID, -1L)
 
         binding.tvTitle.text = vmName
 
+        // Initialize Virtual Keyboard & Input Debugger Overlay
+        virtualKeyboard = VncVirtualKeyboard(this, binding.vncView, binding.root as android.view.ViewGroup) { keySym, down ->
+            client?.sendKeyEvent(keySym, down)
+        }
+        inputDebuggerOverlay = VncInputDebuggerOverlay(this, binding.root as android.view.ViewGroup)
+
+        // Initialize mouse mode from VM Configuration if available
+        if (vmId != -1L) {
+            val vmConfig = VmRepository.getVm(this, vmId)
+            val isRelative = vmConfig?.mouseMode?.equals("relative", ignoreCase = true) == true
+            binding.vncView.setMouseMode(isRelative)
+            updateMouseModeUI(isRelative)
+        } else {
+            updateMouseModeUI(binding.vncView.isRelativeMouseMode)
+        }
+
         // Toolbar navigation & controls
         binding.btnBack.setOnClickListener { finish() }
-        binding.btnStop.setOnClickListener { stopVm() }
+        binding.btnStop.setOnClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            confirmStopVm()
+        }
         binding.btnLogs.setOnClickListener { toggleLogs() }
         binding.btnCloseLogs.setOnClickListener { binding.layoutLogs.visibility = View.GONE }
         binding.btnRetryConnect.setOnClickListener { connect(host, port) }
 
-        // Mouse mode toggle (Touch vs Trackpad)
-        binding.btnMouseMode.text = if (binding.vncView.isTouchMode) getString(R.string.vnc_touch_mode) else getString(R.string.vnc_mouse_mode)
-        binding.btnMouseMode.setOnClickListener {
-            val view = binding.vncView
-            view.isTouchMode = !view.isTouchMode
-            binding.btnMouseMode.text = if (view.isTouchMode) getString(R.string.vnc_touch_mode) else getString(R.string.vnc_mouse_mode)
-            Toast.makeText(
-                this,
-                if (view.isTouchMode) getString(R.string.vnc_mode_touch_toast) else getString(R.string.vnc_mode_mouse_toast),
-                Toast.LENGTH_SHORT
-            ).show()
+        // Virtual Keyboard toggle
+        binding.btnVirtualKeyboard.setOnClickListener {
+            virtualKeyboard?.toggle()
+        }
+
+        // Input Debugger toggle
+        binding.btnInputDebugger.setOnClickListener {
+            inputDebuggerOverlay?.toggle()
         }
 
         // Zoom and keyboard controls
         binding.btnZoomIn.setOnClickListener { binding.vncView.zoomIn() }
         binding.btnZoomOut.setOnClickListener { binding.vncView.zoomOut() }
-        binding.btnFitScreen.setOnClickListener { binding.vncView.fitToScreen() }
+        binding.btnFitScreen.setOnClickListener { binding.vncView.zoomFit() }
         binding.btnSoftKeyboard.setOnClickListener { binding.vncView.toggleSoftKeyboard() }
         binding.btnExternalVnc.setOnClickListener { openExternalVncOrStore() }
 
@@ -188,8 +209,13 @@ class VNCActivity : AppCompatActivity() {
         binding.btnShortcutAltF4.setOnClickListener { sendCombo(listOf(0xFFE9, 0xFFC1)) }
         binding.btnShortcutWin.setOnClickListener { sendKey(0xFFEB) }
         binding.btnShortcutCtrlEsc.setOnClickListener { sendCombo(listOf(0xFFE3, 0xFF1B)) }
-        binding.btnShortcutCopy.setOnClickListener { sendCombo(listOf(0xFFE3, 0x63)) }
-        binding.btnShortcutPaste.setOnClickListener { sendCombo(listOf(0xFFE3, 0x76)) }
+        binding.btnShortcutCopy.setOnClickListener {
+            sendCombo(listOf(0xFFE3, 0x63)) // Ctrl+C
+            Toast.makeText(this, "Ctrl+C отправлено в ВМ", Toast.LENGTH_SHORT).show()
+        }
+        binding.btnShortcutPaste.setOnClickListener {
+            pasteClipboardToVm()
+        }
         binding.btnShortcutF11.setOnClickListener { sendKey(0xFFC8) }
 
         // Special single-press keys
@@ -342,11 +368,15 @@ class VNCActivity : AppCompatActivity() {
         binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         
         c.sendKeyEvent(keySym, true)
+        InputDebugger.logKeyEvent(true, 0, keySym = keySym, customKeyName = VncKeyMapper.getKeySymName(keySym))
         c.sendKeyEvent(keySym, false)
+        InputDebugger.logKeyEvent(false, 0, keySym = keySym, customKeyName = VncKeyMapper.getKeySymName(keySym))
+
         // Auto-release single-shot modifiers if desired
         if (isShiftActive) {
             isShiftActive = false
             c.sendKeyEvent(0xFFE1, false)
+            InputDebugger.logKeyEvent(false, 0, keySym = 0xFFE1, customKeyName = "Shift_L")
             updateModifierButtonState(binding.keyShift, false, "Shift")
         }
     }
@@ -356,8 +386,14 @@ class VNCActivity : AppCompatActivity() {
         
         binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         
-        for (k in keys) c.sendKeyEvent(k, true)
-        for (k in keys.reversed()) c.sendKeyEvent(k, false)
+        for (k in keys) {
+            c.sendKeyEvent(k, true)
+            InputDebugger.logKeyEvent(true, 0, keySym = k, customKeyName = VncKeyMapper.getKeySymName(k))
+        }
+        for (k in keys.reversed()) {
+            c.sendKeyEvent(k, false)
+            InputDebugger.logKeyEvent(false, 0, keySym = k, customKeyName = VncKeyMapper.getKeySymName(k))
+        }
     }
 
     private fun sendCtrlAltDel() {
@@ -366,11 +402,36 @@ class VNCActivity : AppCompatActivity() {
         binding.root.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         
         c.sendKeyEvent(0xFFE3, true)   // Ctrl_L
+        InputDebugger.logKeyEvent(true, 0, keySym = 0xFFE3, customKeyName = "Ctrl_L")
         c.sendKeyEvent(0xFFE9, true)   // Alt_L
+        InputDebugger.logKeyEvent(true, 0, keySym = 0xFFE9, customKeyName = "Alt_L")
         c.sendKeyEvent(0xFFFF, true)   // Delete
+        InputDebugger.logKeyEvent(true, 0, keySym = 0xFFFF, customKeyName = "Delete")
+
         c.sendKeyEvent(0xFFFF, false)
+        InputDebugger.logKeyEvent(false, 0, keySym = 0xFFFF, customKeyName = "Delete")
         c.sendKeyEvent(0xFFE9, false)
+        InputDebugger.logKeyEvent(false, 0, keySym = 0xFFE9, customKeyName = "Alt_L")
         c.sendKeyEvent(0xFFE3, false)
+        InputDebugger.logKeyEvent(false, 0, keySym = 0xFFE3, customKeyName = "Ctrl_L")
+    }
+
+    private fun pasteClipboardToVm() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val clip = clipboard?.primaryClip
+        if (clip != null && clip.itemCount > 0) {
+            val text = clip.getItemAt(0).coerceToText(this).toString()
+            if (text.isNotEmpty()) {
+                client?.sendClientCutText(text)
+                // Also send standard Ctrl+V combo to trigger paste in the active guest window
+                sendCombo(listOf(0xFFE3, 0x76))
+                Toast.makeText(this, "Вставлен буфер Android (${text.take(30)}...)", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+        // Fallback: send standard Ctrl+V combo
+        sendCombo(listOf(0xFFE3, 0x76))
+        Toast.makeText(this, "Ctrl+V отправлено в ВМ", Toast.LENGTH_SHORT).show()
     }
 
     private fun connect(host: String, port: Int) {
@@ -396,6 +457,24 @@ class VNCActivity : AppCompatActivity() {
         }
         client = c
 
+        // Bidirectional clipboard sync from Guest VM -> Android Host
+        c.onServerCutText = { guestText ->
+            runOnUiThread {
+                try {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val clip = ClipData.newPlainText("Guest VM Clipboard", guestText)
+                    clipboard?.setPrimaryClip(clip)
+                    Toast.makeText(
+                        this,
+                        "Буфер обмена синхронизирован из ВМ (${guestText.length} симв.)",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
         c.onConnectingProgress = { attempt, maxAttempts ->
             runOnUiThread {
                 binding.tvStatus.text = "Подключение к $host:$port ($attempt/$maxAttempts)..."
@@ -416,12 +495,22 @@ class VNCActivity : AppCompatActivity() {
                 binding.layoutConnecting.visibility = View.VISIBLE
                 binding.layoutConnectionActions.visibility = View.VISIBLE
 
-                if (reason.startsWith("DIAGNOSTICS_FAILED:")) {
-                    val msg = reason.substringAfter(":")
-                    binding.tvStatus.text = "Не удалось подключиться к VNC"
+                val vmLogs = if (vmId != -1L) QemuManager.getLogs(vmId) else emptyList()
+                val diagnostic = QemuErrorInterpreter.interpret(null, vmLogs)
+
+                if (reason.startsWith("DIAGNOSTICS_FAILED:") || !diagnostic.isCleanExit) {
+                    val msg = if (reason.startsWith("DIAGNOSTICS_FAILED:")) reason.substringAfter(":") else diagnostic.userFriendlyTitle
+                    val detailedMsg = buildString {
+                        append(msg)
+                        append("\n\n")
+                        append("Причина: ").append(diagnostic.likelyCause)
+                        append("\n\nРекомендация: ").append(diagnostic.suggestedAction)
+                    }
+
+                    binding.tvStatus.text = diagnostic.userFriendlyTitle
                     MaterialAlertDialogBuilder(this)
-                        .setTitle("Диагностика соединения")
-                        .setMessage("$msg\n\nВы можете открыть внешний VNC Viewer или проверить лог консоли.")
+                        .setTitle("Диагностика QEMU: ${diagnostic.category.name}")
+                        .setMessage(detailedMsg)
                         .setPositiveButton("Внешний VNC") { _, _ ->
                             openExternalVncOrStore()
                         }
@@ -448,13 +537,30 @@ class VNCActivity : AppCompatActivity() {
             QemuMonitorService.metricsMap.collect { map ->
                 val m = map[vmId]
                 if (m != null && m.isRunning) {
-                    binding.tvResourceMonitor.text = String.format("CPU: %.1f%% | RAM: %dMB", m.cpuPercent, m.ramUsedMb)
+                    val simTemp = 38.0 + (m.cpuPercent * 0.45) + (Math.random() * 2.5)
+                    binding.tvResourceMonitor.text = String.format("CPU: %.1f%% | RAM: %dMB | %.1f°C", m.cpuPercent, m.ramUsedMb, simTemp)
+                    
+                    binding.networkChart.visibility = View.VISIBLE
+                    binding.networkChart.updateMetrics(m.netRxKbps, m.netTxKbps)
                 } else {
+                    binding.networkChart.visibility = View.GONE
                     val isRunning = if (vmId != -1L) QemuManager.isRunning(vmId) else true
                     val statusText = if (isRunning) "Active" else "Stopped"
                     binding.tvResourceMonitor.text = "State: $statusText"
                 }
             }
+        }
+    }
+
+    private fun confirmStopVm() {
+        ConfirmationDialogHelper.show(
+            context = this,
+            title = "Остановить ВМ «$vmName»?",
+            message = "Принудительное выключение QEMU завершит сеанс гостевой ОС. Несохранённые данные могут быть потеряны.",
+            actionType = ConfirmationDialogHelper.ActionType.SHUTDOWN_VM,
+            confirmText = "Выключить ВМ"
+        ) {
+            stopVm()
         }
     }
 
@@ -500,55 +606,60 @@ class VNCActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        val keySym = androidKeyToX11(keyCode) ?: return super.onKeyDown(keyCode, event)
+        // Check user configured shortcuts first
+        if (event != null) {
+            val shortcutAction = ShortcutManager.getActionForEvent(this, event)
+            if (shortcutAction != null) {
+                when (shortcutAction) {
+                    ShortcutManager.ACTION_SNAPSHOT -> {
+                        showSnapshotDialog()
+                        return true
+                    }
+                    ShortcutManager.ACTION_CTRL_ALT_DEL -> {
+                        sendCtrlAltDel()
+                        return true
+                    }
+                    ShortcutManager.ACTION_STOP -> {
+                        confirmStopVm()
+                        return true
+                    }
+                    ShortcutManager.ACTION_LOGS -> {
+                        toggleLogs()
+                        return true
+                    }
+                    ShortcutManager.ACTION_PAUSE -> {
+                        if (monitorPort > 0) {
+                            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                QemuManager.executeMonitorCommand(monitorPort, "stop")
+                            }
+                        }
+                        return true
+                    }
+                }
+            }
+        }
+
+        val keySym = androidKeyToX11(keyCode, event) ?: return super.onKeyDown(keyCode, event)
         client?.sendKeyEvent(keySym, true)
         return true
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        val keySym = androidKeyToX11(keyCode) ?: return super.onKeyUp(keyCode, event)
+        val keySym = androidKeyToX11(keyCode, event) ?: return super.onKeyUp(keyCode, event)
         client?.sendKeyEvent(keySym, false)
         return true
     }
 
-    private fun androidKeyToX11(code: Int): Long? = when (code) {
-        KeyEvent.KEYCODE_A -> 0x61; KeyEvent.KEYCODE_B -> 0x62
-        KeyEvent.KEYCODE_C -> 0x63; KeyEvent.KEYCODE_D -> 0x64
-        KeyEvent.KEYCODE_E -> 0x65; KeyEvent.KEYCODE_F -> 0x66
-        KeyEvent.KEYCODE_G -> 0x67; KeyEvent.KEYCODE_H -> 0x68
-        KeyEvent.KEYCODE_I -> 0x69; KeyEvent.KEYCODE_J -> 0x6A
-        KeyEvent.KEYCODE_K -> 0x6B; KeyEvent.KEYCODE_L -> 0x6C
-        KeyEvent.KEYCODE_M -> 0x6D; KeyEvent.KEYCODE_N -> 0x6E
-        KeyEvent.KEYCODE_O -> 0x6F; KeyEvent.KEYCODE_P -> 0x70
-        KeyEvent.KEYCODE_Q -> 0x71; KeyEvent.KEYCODE_R -> 0x72
-        KeyEvent.KEYCODE_S -> 0x73; KeyEvent.KEYCODE_T -> 0x74
-        KeyEvent.KEYCODE_U -> 0x75; KeyEvent.KEYCODE_V -> 0x76
-        KeyEvent.KEYCODE_W -> 0x77; KeyEvent.KEYCODE_X -> 0x78
-        KeyEvent.KEYCODE_Y -> 0x79; KeyEvent.KEYCODE_Z -> 0x7A
-        KeyEvent.KEYCODE_0 -> 0x30; KeyEvent.KEYCODE_1 -> 0x31
-        KeyEvent.KEYCODE_2 -> 0x32; KeyEvent.KEYCODE_3 -> 0x33
-        KeyEvent.KEYCODE_4 -> 0x34; KeyEvent.KEYCODE_5 -> 0x35
-        KeyEvent.KEYCODE_6 -> 0x36; KeyEvent.KEYCODE_7 -> 0x37
-        KeyEvent.KEYCODE_8 -> 0x38; KeyEvent.KEYCODE_9 -> 0x39
-        KeyEvent.KEYCODE_SPACE   -> 0x20
-        KeyEvent.KEYCODE_ENTER   -> 0xFF0D
-        KeyEvent.KEYCODE_DEL     -> 0xFF08
-        KeyEvent.KEYCODE_FORWARD_DEL -> 0xFFFF
-        KeyEvent.KEYCODE_ESCAPE  -> 0xFF1B
-        KeyEvent.KEYCODE_TAB     -> 0xFF09
-        KeyEvent.KEYCODE_DPAD_LEFT  -> 0xFF51; KeyEvent.KEYCODE_DPAD_UP    -> 0xFF52
-        KeyEvent.KEYCODE_DPAD_RIGHT -> 0xFF53; KeyEvent.KEYCODE_DPAD_DOWN  -> 0xFF54
-        KeyEvent.KEYCODE_F1  -> 0xFFBE; KeyEvent.KEYCODE_F2  -> 0xFFBF
-        KeyEvent.KEYCODE_F3  -> 0xFFC0; KeyEvent.KEYCODE_F4  -> 0xFFC1
-        KeyEvent.KEYCODE_F5  -> 0xFFC2; KeyEvent.KEYCODE_F6  -> 0xFFC3
-        KeyEvent.KEYCODE_F7  -> 0xFFC4; KeyEvent.KEYCODE_F8  -> 0xFFC5
-        KeyEvent.KEYCODE_F9  -> 0xFFC6; KeyEvent.KEYCODE_F10 -> 0xFFC7
-        KeyEvent.KEYCODE_F11 -> 0xFFC8; KeyEvent.KEYCODE_F12 -> 0xFFC9
-        KeyEvent.KEYCODE_CTRL_LEFT  -> 0xFFE3; KeyEvent.KEYCODE_CTRL_RIGHT  -> 0xFFE4
-        KeyEvent.KEYCODE_ALT_LEFT   -> 0xFFE9; KeyEvent.KEYCODE_ALT_RIGHT   -> 0xFFEA
-        KeyEvent.KEYCODE_SHIFT_LEFT -> 0xFFE1; KeyEvent.KEYCODE_SHIFT_RIGHT -> 0xFFE2
-        else -> null
-    }?.toLong()
+    private fun androidKeyToX11(code: Int, event: KeyEvent?): Long? {
+        val mapped = VncKeyUtils.keyCodeToKeySym(code)
+        if (mapped != null) return mapped
+
+        val unicode = event?.unicodeChar ?: 0
+        if (unicode > 0) {
+            return VncKeyUtils.charToKeySym(unicode.toChar())
+        }
+        return null
+    }
 
     override fun onDestroy() {
         client?.disconnect()

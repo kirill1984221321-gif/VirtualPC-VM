@@ -63,6 +63,7 @@ data class VmConfig(
     val enableAudio: Boolean = true,
     val audioModel: String = "hda",
     val enableUsbTablet: Boolean = true,
+    val mouseMode: String = "absolute", // "absolute" or "relative"
     val extraArgs: String = "",
     val vncDisplay: Int = 1,   // :1 → port 5901
 ) : Parcelable {

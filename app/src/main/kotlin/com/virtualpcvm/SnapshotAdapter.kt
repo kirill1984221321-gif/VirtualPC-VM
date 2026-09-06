@@ -8,6 +8,7 @@ import com.virtualpcvm.databinding.ItemSnapshotBinding
 class SnapshotAdapter(
     private var items: List<VmSnapshot>,
     private val onRevert: (VmSnapshot) -> Unit,
+    private val onRename: (VmSnapshot) -> Unit,
     private val onDelete: (VmSnapshot) -> Unit
 ) : RecyclerView.Adapter<SnapshotAdapter.VH>() {
 
@@ -23,6 +24,7 @@ class SnapshotAdapter(
         holder.b.apply {
             tvSnapshotName.text = snap.tag
             tvSnapshotInfo.text = "ID: ${snap.id}  •  ${snap.date}  •  ${snap.vmSize}"
+            btnRenameSnapshot.setOnClickListener { onRename(snap) }
             btnRevertSnapshot.setOnClickListener { onRevert(snap) }
             btnDeleteSnapshot.setOnClickListener { onDelete(snap) }
         }

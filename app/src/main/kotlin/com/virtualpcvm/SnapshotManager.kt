@@ -162,4 +162,30 @@ object SnapshotManager {
             Result.failure(Exception("Ошибка удаления снапшота qemu-img"))
         }
     }
+
+    suspend fun renameSnapshot(ctx: Context, cfg: VmConfig, oldTag: String, newTag: String): Result<String> = withContext(Dispatchers.IO) {
+        val safeNewTag = newTag.trim().replace("\\s+".toRegex(), "_")
+        if (safeNewTag.isEmpty()) return@withContext Result.failure(Exception("Новое имя снапшота не может быть пустым"))
+
+        val isRunning = QemuManager.isRunning(cfg.id)
+        if (isRunning && cfg.monitorPort > 0) {
+            val saveResp = QemuManager.executeMonitorCommand(cfg.monitorPort, "savevm $safeNewTag")
+            if (!saveResp.contains("Error", ignoreCase = true) && !saveResp.contains("failed", ignoreCase = true)) {
+                QemuManager.executeMonitorCommand(cfg.monitorPort, "delvm $oldTag")
+                return@withContext Result.success("Снапшот переименован в «$safeNewTag»")
+            }
+            return@withContext Result.failure(Exception(saveResp))
+        }
+
+        val diskFile = File(cfg.diskPath)
+        if (!diskFile.exists()) return@withContext Result.failure(Exception("Файл диска не найден"))
+
+        // Create with new tag then delete old tag
+        val created = QemuManager.manageSnapshot(ctx, diskFile, safeNewTag, "-c") {}
+        if (created) {
+            QemuManager.manageSnapshot(ctx, diskFile, oldTag, "-d") {}
+            return@withContext Result.success("Снапшот переименован в «$safeNewTag»")
+        }
+        return@withContext Result.failure(Exception("Не удалось переименовать снапшот"))
+    }
 }

@@ -15,7 +15,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="Virtual PC"
+            app:title="@string/title_main"
             app:titleTextColor="?attr/colorOnPrimaryContainer"
             app:layout_scrollFlags="scroll|enterAlways"
             android:background="?attr/colorPrimaryContainer" />
@@ -27,7 +27,7 @@
             android:layout_marginHorizontal="16dp"
             android:layout_marginVertical="8dp"
             android:background="@drawable/bg_search"
-            app:queryHint="Поиск машин..."
+            app:queryHint="@string/search_hint"
             app:iconifiedByDefault="false" />
             
         <TextView
@@ -40,22 +40,134 @@
             android:visibility="gone" />
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerVms"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior"
-        android:clipToPadding="false"
-        android:paddingBottom="88dp"
-        android:paddingTop="8dp" />
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerVms"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingBottom="16dp"
+            android:paddingTop="8dp" />
+
+        <!-- Disk Storage Growth Visualization Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDiskUsage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="6dp"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="2dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurface">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/headerDiskUsage"
+                    android:layout_width="match_parent"
+                    android:layout_height="42dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="12dp"
+                    android:background="#1E1F25">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="💽"
+                        android:textSize="14sp"
+                        android:layout_marginEnd="6dp" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Хранилище дисков (QCOW2 / RAW)"
+                        android:textColor="#E3E1E9"
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRefreshDiskUsage"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="Обновить"
+                        android:textSize="11sp"
+                        android:textColor="#80D8FF"
+                        android:minWidth="0dp"
+                        android:paddingHorizontal="6dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnToggleDiskUsage"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="▼ Свернуть"
+                        android:textSize="11sp"
+                        android:textColor="#80D8FF"
+                        android:minWidth="0dp"
+                        android:paddingHorizontal="6dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layoutDiskUsageBody"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="8dp">
+
+                    <com.virtualpcvm.DiskUsageChartView
+                        android:id="@+id/chartDiskUsage"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Real-time QEMU Log Viewer Component -->
+        <com.virtualpcvm.RealtimeLogView
+            android:id="@+id/realtimeLogView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="8dp" />
+    </LinearLayout>
+
+    <!-- Floating Quick Actions Button -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabQuickActions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="16dp"
+        android:contentDescription="Quick Actions"
+        app:srcCompat="@android:drawable/ic_dialog_dialer"
+        app:tint="?attr/colorOnPrimaryContainer"
+        app:backgroundTint="?attr/colorPrimaryContainer"
+        app:elevation="4dp" />
+
+    <!-- Create VM FAB -->
     <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/fabAddVm"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
-        android:text="Создать ВМ"
+        android:text="@string/fab_create_vm"
         app:icon="@android:drawable/ic_input_add"
         app:elevation="4dp" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

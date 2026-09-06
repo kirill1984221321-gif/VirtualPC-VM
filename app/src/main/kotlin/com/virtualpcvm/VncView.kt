@@ -99,6 +99,20 @@ class VncView @JvmOverloads constructor(
         }
     }
 
+    private var showZoomHudUntil = 0L
+    private val hudBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xCC161B22.toInt()
+        style = Paint.Style.FILL
+    }
+    private val hudTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF80D8FF.toInt()
+        textSize = 34f
+        isFakeBoldText = true
+        textAlign = Paint.Align.CENTER
+    }
+
+    private var accumulatedScrollDistanceY = 0f
+
     // Gesture detector
     private val gestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean = true
@@ -108,12 +122,20 @@ class VncView @JvmOverloads constructor(
             if (isTouchMode) {
                 val (vx, vy) = viewToVnc(e.x, e.y)
                 client?.sendPointerEvent(vx, vy, 0x01) // Left click down
-                postDelayed({ client?.sendPointerEvent(vx, vy, 0x00) }, 50)
+                InputDebugger.logPointerEvent("POINTER_DOWN", vx, vy, 0x01, "ABSOLUTE", "Single Tap (LMB)")
+                postDelayed({
+                    client?.sendPointerEvent(vx, vy, 0x00)
+                    InputDebugger.logPointerEvent("POINTER_UP", vx, vy, 0x00, "ABSOLUTE", "Tap Release")
+                }, 50)
             } else {
                 val cx = cursorVncX.roundToInt()
                 val cy = cursorVncY.roundToInt()
                 client?.sendPointerEvent(cx, cy, 0x01)
-                postDelayed({ client?.sendPointerEvent(cx, cy, 0x00) }, 50)
+                InputDebugger.logPointerEvent("POINTER_DOWN", cx, cy, 0x01, "RELATIVE", "Trackpad Tap (LMB)")
+                postDelayed({
+                    client?.sendPointerEvent(cx, cy, 0x00)
+                    InputDebugger.logPointerEvent("POINTER_UP", cx, cy, 0x00, "RELATIVE", "Trackpad Tap Release")
+                }, 50)
             }
             return true
         }
@@ -125,6 +147,7 @@ class VncView @JvmOverloads constructor(
                 val cx = cursorVncX.roundToInt()
                 val cy = cursorVncY.roundToInt()
                 client?.sendPointerEvent(cx, cy, 0x01)
+                InputDebugger.logPointerEvent("POINTER_DOWN", cx, cy, 0x01, "RELATIVE", "Double Tap Drag Started")
             }
             return true
         }
@@ -135,28 +158,43 @@ class VncView @JvmOverloads constructor(
             if (isTouchMode) {
                 val (vx, vy) = viewToVnc(e.x, e.y)
                 client?.sendPointerEvent(vx, vy, 0x04) // Right click down
-                postDelayed({ client?.sendPointerEvent(vx, vy, 0x00) }, 60)
+                InputDebugger.logPointerEvent("POINTER_DOWN", vx, vy, 0x04, "ABSOLUTE", "Long Press (RMB)")
+                postDelayed({
+                    client?.sendPointerEvent(vx, vy, 0x00)
+                    InputDebugger.logPointerEvent("POINTER_UP", vx, vy, 0x00, "ABSOLUTE", "RMB Release")
+                }, 60)
             } else {
                 val cx = cursorVncX.roundToInt()
                 val cy = cursorVncY.roundToInt()
                 client?.sendPointerEvent(cx, cy, 0x04)
-                postDelayed({ client?.sendPointerEvent(cx, cy, 0x00) }, 60)
+                InputDebugger.logPointerEvent("POINTER_DOWN", cx, cy, 0x04, "RELATIVE", "Long Press (RMB)")
+                postDelayed({
+                    client?.sendPointerEvent(cx, cy, 0x00)
+                    InputDebugger.logPointerEvent("POINTER_UP", cx, cy, 0x00, "RELATIVE", "RMB Release")
+                }, 60)
             }
         }
 
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
             if (e2.pointerCount >= 2) {
-                // Two-finger scroll: in trackpad mode, forward vertical scroll as mouse wheel
-                if (!isTouchMode && Math.abs(distanceY) > Math.abs(distanceX) * 1.5f) {
-                    val cx = cursorVncX.roundToInt()
-                    val cy = cursorVncY.roundToInt()
-                    val wheelButton = if (distanceY > 0) 0x10 else 0x08 // 0x08 = Wheel Up, 0x10 = Wheel Down
-                    client?.sendPointerEvent(cx, cy, wheelButton)
-                    postDelayed({ client?.sendPointerEvent(cx, cy, 0) }, 40)
+                // Two-finger scroll: vertical gesture translated into mouse wheel events
+                if (Math.abs(distanceY) > Math.abs(distanceX) * 1.2f) {
+                    accumulatedScrollDistanceY += distanceY
+                    val scrollThreshold = 18f
+                    if (Math.abs(accumulatedScrollDistanceY) >= scrollThreshold) {
+                        val cx = if (isTouchMode) viewToVnc(e2.x, e2.y).first else cursorVncX.roundToInt()
+                        val cy = if (isTouchMode) viewToVnc(e2.x, e2.y).second else cursorVncY.roundToInt()
+                        val isScrollDown = accumulatedScrollDistanceY > 0
+                        val wheelButton = if (isScrollDown) 0x10 else 0x08 // 0x08 = Wheel Up, 0x10 = Wheel Down
+                        client?.sendPointerEvent(cx, cy, wheelButton)
+                        InputDebugger.logPointerEvent("SCROLL", cx, cy, wheelButton, if (isTouchMode) "ABSOLUTE" else "RELATIVE", if (isScrollDown) "Two-Finger Wheel Down" else "Two-Finger Wheel Up")
+                        postDelayed({ client?.sendPointerEvent(cx, cy, 0) }, 35)
+                        accumulatedScrollDistanceY = 0f
+                    }
                     return true
                 }
 
-                // Otherwise pan the viewport
+                // Two-finger horizontal or general drag: smoothly pan the viewport
                 panX -= distanceX
                 panY -= distanceY
                 clampPan()
@@ -167,7 +205,7 @@ class VncView @JvmOverloads constructor(
         }
     })
 
-    // Pinch-to-zoom detector
+    // Pinch-to-zoom detector with smooth HUD feedback
     private val scaleDetector = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             val scaleFactor = detector.scaleFactor
@@ -184,6 +222,7 @@ class VncView @JvmOverloads constructor(
             panY = focusY + (panY - focusY) * actualFactor
 
             clampPan()
+            showZoomHudUntil = System.currentTimeMillis() + 1500L
             invalidate()
             return true
         }
@@ -235,28 +274,6 @@ class VncView @JvmOverloads constructor(
             }
         }
         postInvalidate()
-    }
-
-    fun zoomIn() {
-        val cx = width / 2f
-        val cy = height / 2f
-        scaleX = (scaleX * 1.25f).coerceAtMost(6.0f)
-        scaleY = scaleX
-        panX = cx + (panX - cx) * 1.25f
-        panY = cy + (panY - cy) * 1.25f
-        clampPan()
-        invalidate()
-    }
-
-    fun zoomOut() {
-        val cx = width / 2f
-        val cy = height / 2f
-        scaleX = (scaleX * 0.8f).coerceAtLeast(0.2f)
-        scaleY = scaleX
-        panX = cx + (panX - cx) * 0.8f
-        panY = cy + (panY - cy) * 0.8f
-        clampPan()
-        invalidate()
     }
 
     fun fitToScreen() {
@@ -341,6 +358,20 @@ class VncView @JvmOverloads constructor(
             canvas.drawPath(cursorPath, cursorFillPaint)
             canvas.drawPath(cursorPath, cursorStrokePaint)
             canvas.restore()
+        }
+
+        // Draw Zoom HUD overlay when zooming
+        val now = System.currentTimeMillis()
+        if (now < showZoomHudUntil) {
+            val zoomPct = (scaleX * 100).roundToInt()
+            val text = "Zoom: $zoomPct%"
+            val hudW = 220f
+            val hudH = 64f
+            val hudLeft = (width - hudW) / 2f
+            val hudTop = 40f
+            canvas.drawRoundRect(hudLeft, hudTop, hudLeft + hudW, hudTop + hudH, 32f, 32f, hudBgPaint)
+            canvas.drawText(text, width / 2f, hudTop + 44f, hudTextPaint)
+            postInvalidateDelayed(50)
         }
     }
 
@@ -433,28 +464,42 @@ class VncView @JvmOverloads constructor(
     fun toggleSoftKeyboard() {
         requestFocus()
         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        imm?.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY)
+        imm?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+            ?: imm?.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY)
     }
 
     override fun onCheckIsTextEditor(): Boolean = true
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_ACTION_NONE
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_ACTION_NONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
         outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT or EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         return object : android.view.inputmethod.BaseInputConnection(this, false) {
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                text?.forEach { ch ->
-                    val keySym = charToKeySym(ch)
-                    client?.sendKeyEvent(keySym, true)
-                    client?.sendKeyEvent(keySym, false)
+                if (text != null && text.isNotEmpty()) {
+                    sendText(text.toString())
                 }
+                return true
+            }
+
+            override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
+                // If keyboard commits composing text directly
+                return true
+            }
+
+            override fun finishComposingText(): Boolean {
                 return true
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
                 if (beforeLength > 0) {
-                    client?.sendKeyEvent(0xFF08, true) // Backspace
-                    client?.sendKeyEvent(0xFF08, false)
+                    repeat(beforeLength) {
+                        sendKeyWithHold(0xFF08L) // Backspace
+                    }
+                }
+                if (afterLength > 0) {
+                    repeat(afterLength) {
+                        sendKeyWithHold(0xFFFFL) // Delete
+                    }
                 }
                 return true
             }
@@ -465,59 +510,134 @@ class VncView @JvmOverloads constructor(
         }
     }
 
+    // Pointer click helpers
+    fun sendLeftClick() {
+        val cx = if (isTouchMode) (width / 2) else cursorVncX.roundToInt()
+        val cy = if (isTouchMode) (height / 2) else cursorVncY.roundToInt()
+        client?.sendPointerEvent(cx, cy, 0x01)
+        InputDebugger.logPointerEvent("POINTER_DOWN", cx, cy, 0x01, if (isTouchMode) "ABSOLUTE" else "RELATIVE", "Direct Button Left Click")
+        postDelayed({
+            client?.sendPointerEvent(cx, cy, 0x00)
+            InputDebugger.logPointerEvent("POINTER_UP", cx, cy, 0x00, if (isTouchMode) "ABSOLUTE" else "RELATIVE", "Direct Button Left Release")
+        }, 50)
+    }
+
+    fun sendRightClick() {
+        val cx = if (isTouchMode) (width / 2) else cursorVncX.roundToInt()
+        val cy = if (isTouchMode) (height / 2) else cursorVncY.roundToInt()
+        client?.sendPointerEvent(cx, cy, 0x04)
+        InputDebugger.logPointerEvent("POINTER_DOWN", cx, cy, 0x04, if (isTouchMode) "ABSOLUTE" else "RELATIVE", "Direct Button Right Click")
+        postDelayed({
+            client?.sendPointerEvent(cx, cy, 0x00)
+            InputDebugger.logPointerEvent("POINTER_UP", cx, cy, 0x00, if (isTouchMode) "ABSOLUTE" else "RELATIVE", "Direct Button Right Release")
+        }, 60)
+    }
+
+    fun sendMiddleClick() {
+        val cx = if (isTouchMode) (width / 2) else cursorVncX.roundToInt()
+        val cy = if (isTouchMode) (height / 2) else cursorVncY.roundToInt()
+        client?.sendPointerEvent(cx, cy, 0x02)
+        InputDebugger.logPointerEvent("POINTER_DOWN", cx, cy, 0x02, if (isTouchMode) "ABSOLUTE" else "RELATIVE", "Direct Middle Click")
+        postDelayed({
+            client?.sendPointerEvent(cx, cy, 0x00)
+            InputDebugger.logPointerEvent("POINTER_UP", cx, cy, 0x00, if (isTouchMode) "ABSOLUTE" else "RELATIVE", "Direct Middle Release")
+        }, 50)
+    }
+
+    fun sendWheel(up: Boolean) {
+        val cx = if (isTouchMode) (width / 2) else cursorVncX.roundToInt()
+        val cy = if (isTouchMode) (height / 2) else cursorVncY.roundToInt()
+        val mask = if (up) 0x08 else 0x10
+        client?.sendPointerEvent(cx, cy, mask)
+        InputDebugger.logPointerEvent("SCROLL", cx, cy, mask, if (isTouchMode) "ABSOLUTE" else "RELATIVE", if (up) "Button Wheel Up" else "Button Wheel Down")
+        postDelayed({ client?.sendPointerEvent(cx, cy, 0x00) }, 40)
+    }
+
+    private val inputHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    fun sendKeyWithHold(keySym: Long, holdMs: Long = 35L) {
+        val c = client ?: return
+        if (keySym == 0L) return
+        c.sendKeyEvent(keySym, true)
+        InputDebugger.logKeyEvent(true, 0, keySym = keySym, customKeyName = VncKeyMapper.getKeySymName(keySym))
+        inputHandler.postDelayed({
+            c.sendKeyEvent(keySym, false)
+            InputDebugger.logKeyEvent(false, 0, keySym = keySym, customKeyName = VncKeyMapper.getKeySymName(keySym))
+        }, holdMs)
+    }
+
+    fun sendText(text: String, charDelayMs: Long = 30L) {
+        val c = client ?: return
+        var currentDelay = 0L
+        for (ch in text) {
+            val sym = VncKeyUtils.charToKeySym(ch)
+            if (sym != 0L) {
+                inputHandler.postDelayed({
+                    c.sendKeyEvent(sym, true)
+                    InputDebugger.logKeyEvent(true, 0, keySym = sym, customKeyName = "'$ch' (${VncKeyMapper.getKeySymName(sym)})")
+                    inputHandler.postDelayed({
+                        c.sendKeyEvent(sym, false)
+                        InputDebugger.logKeyEvent(false, 0, keySym = sym, customKeyName = "'$ch' (${VncKeyMapper.getKeySymName(sym)})")
+                    }, 25L)
+                }, currentDelay)
+                currentDelay += charDelayMs + 25L
+            }
+        }
+    }
+
+    fun getVncClient(): VncClient? = client
+
+    fun sendClientCutText(text: String) {
+        client?.sendClientCutText(text)
+    }
+
+    fun zoomIn() {
+        val newScale = (scaleX * 1.25f).coerceIn(0.2f, 6.0f)
+        val factor = newScale / scaleX
+        scaleX = newScale
+        scaleY = newScale
+        panX = (width / 2f) + (panX - width / 2f) * factor
+        panY = (height / 2f) + (panY - height / 2f) * factor
+        clampPan()
+        showZoomHudUntil = System.currentTimeMillis() + 1500L
+        invalidate()
+    }
+
+    fun zoomOut() {
+        val newScale = (scaleX * 0.8f).coerceIn(0.2f, 6.0f)
+        val factor = newScale / scaleX
+        scaleX = newScale
+        scaleY = newScale
+        panX = (width / 2f) + (panX - width / 2f) * factor
+        panY = (height / 2f) + (panY - height / 2f) * factor
+        clampPan()
+        showZoomHudUntil = System.currentTimeMillis() + 1500L
+        invalidate()
+    }
+
+    fun zoomFit() {
+        fitToScreen()
+        showZoomHudUntil = System.currentTimeMillis() + 1500L
+        invalidate()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val keySym = keyCodeToKeySym(keyCode, event)
+        val keySym = VncKeyUtils.keyCodeToKeySym(keyCode, event)
         if (keySym != 0L) {
             client?.sendKeyEvent(keySym, true)
+            InputDebugger.logKeyEvent(true, keyCode, event, keySym)
             return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        val keySym = keyCodeToKeySym(keyCode, event)
+        val keySym = VncKeyUtils.keyCodeToKeySym(keyCode, event)
         if (keySym != 0L) {
             client?.sendKeyEvent(keySym, false)
+            InputDebugger.logKeyEvent(false, keyCode, event, keySym)
             return true
         }
         return super.onKeyUp(keyCode, event)
-    }
-
-    private fun charToKeySym(ch: Char): Long {
-        return when (ch) {
-            '\n', '\r' -> 0xFF0D // Return
-            '\t' -> 0xFF09 // Tab
-            '\b' -> 0xFF08 // Backspace
-            else -> ch.code.toLong()
-        }
-    }
-
-    private fun keyCodeToKeySym(keyCode: Int, event: KeyEvent): Long {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_DEL -> 0xFF08
-            KeyEvent.KEYCODE_TAB -> 0xFF09
-            KeyEvent.KEYCODE_ENTER -> 0xFF0D
-            KeyEvent.KEYCODE_ESCAPE -> 0xFF1B
-            KeyEvent.KEYCODE_DPAD_UP -> 0xFF52
-            KeyEvent.KEYCODE_DPAD_DOWN -> 0xFF54
-            KeyEvent.KEYCODE_DPAD_LEFT -> 0xFF51
-            KeyEvent.KEYCODE_DPAD_RIGHT -> 0xFF53
-            KeyEvent.KEYCODE_PAGE_UP -> 0xFF55
-            KeyEvent.KEYCODE_PAGE_DOWN -> 0xFF56
-            KeyEvent.KEYCODE_MOVE_HOME -> 0xFF50
-            KeyEvent.KEYCODE_MOVE_END -> 0xFF57
-            KeyEvent.KEYCODE_INSERT -> 0xFF63
-            KeyEvent.KEYCODE_FORWARD_DEL -> 0xFFFF
-            KeyEvent.KEYCODE_CTRL_LEFT -> 0xFFE3
-            KeyEvent.KEYCODE_CTRL_RIGHT -> 0xFFE4
-            KeyEvent.KEYCODE_ALT_LEFT -> 0xFFE9
-            KeyEvent.KEYCODE_ALT_RIGHT -> 0xFFEA
-            KeyEvent.KEYCODE_SHIFT_LEFT -> 0xFFE1
-            KeyEvent.KEYCODE_SHIFT_RIGHT -> 0xFFE2
-            else -> {
-                val unicode = event.getUnicodeChar(event.metaState)
-                if (unicode != 0) unicode.toLong() else 0L
-            }
-        }
     }
 }

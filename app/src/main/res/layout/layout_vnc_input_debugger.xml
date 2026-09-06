@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardInputDebugger"
+    android:layout_width="match_parent"
+    android:layout_height="280dp"
+    android:layout_margin="8dp"
+    app:cardBackgroundColor="#F20D1117"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="14dp"
+    app:strokeWidth="1.5dp"
+    app:strokeColor="#58A6FF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🐛"
+                android:textSize="15sp"
+                android:layout_marginEnd="6dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dbg_title"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/tvDbgLiveSummary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#7EE787"
+                    android:fontFamily="monospace"
+                    android:textSize="10sp"
+                    android:text="Live: 0 events" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDbgClear"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:text="@string/dbg_btn_clear"
+                android:textSize="10sp"
+                android:textColor="#FF7B72"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDbgCopy"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:text="@string/dbg_btn_copy"
+                android:textSize="10sp"
+                android:textColor="#58A6FF"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDbgClose"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:text="✕"
+                android:textColor="#8892B0"
+                android:textSize="14sp"
+                android:minWidth="0dp"
+                android:padding="0dp" />
+        </LinearLayout>
+
+        <!-- Filter Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFilterAll"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:text="@string/dbg_filter_all"
+                android:textSize="9sp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp"
+                android:layout_marginEnd="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFilterKeys"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:text="@string/dbg_filter_keys"
+                android:textSize="9sp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp"
+                android:layout_marginEnd="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFilterMouse"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:text="@string/dbg_filter_mouse"
+                android:textSize="9sp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp" />
+        </LinearLayout>
+
+        <!-- Events List -->
+        <ScrollView
+            android:id="@+id/scrollDbgLogs"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#0D1117"
+            android:padding="4dp">
+
+            <LinearLayout
+                android:id="@+id/containerDbgEvents"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

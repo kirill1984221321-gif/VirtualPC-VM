@@ -15,6 +15,15 @@
         android:focusableInTouchMode="true"
         android:visibility="invisible" />
 
+    <!-- Real-time network traffic monitor -->
+    <com.virtualpcvm.NetworkChartView
+        android:id="@+id/networkChart"
+        android:layout_width="200dp"
+        android:layout_height="80dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="56dp"
+        android:layout_marginEnd="16dp" />
+
     <!-- Connecting overlay -->
     <LinearLayout
         android:id="@+id/layoutConnecting"
@@ -226,6 +235,29 @@
                     android:layout_height="36dp"
                     android:text="📂"
                     android:textColor="#E0E0E0"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
+
+                <!-- Virtual Keyboard (Optimized with F1-F12, Cyrillic, Latching) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnVirtualKeyboard"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="@string/vk_toggle_btn"
+                    android:textColor="#58A6FF"
+                    android:textStyle="bold"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="5dp" />
+
+                <!-- Input Debugger overlay toggle -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnInputDebugger"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="@string/dbg_toggle_btn"
+                    android:textColor="#7EE787"
                     android:minWidth="0dp"
                     android:paddingHorizontal="5dp" />
 

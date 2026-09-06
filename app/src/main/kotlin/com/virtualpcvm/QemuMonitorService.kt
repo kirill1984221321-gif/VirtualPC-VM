@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Background service and engine that queries the QEMU Monitor
- * and OS process tables to extract real-time CPU and RAM usage.
+ * and OS process tables to extract real-time CPU, RAM, Network RX/TX, and Disk I/O metrics.
  */
 class QemuMonitorService : Service() {
 
@@ -31,6 +31,10 @@ class QemuMonitorService : Service() {
             val cpuPercent: Float = 0f,
             val ramUsedMb: Int = 0,
             val ramTotalMb: Int = 1024,
+            val netRxKbps: Float = 0f,
+            val netTxKbps: Float = 0f,
+            val diskReadKbps: Float = 0f,
+            val diskWriteKbps: Float = 0f,
             val isRunning: Boolean = false,
             val status: String = "Stopped",
             val pid: Long = -1L,
@@ -41,9 +45,15 @@ class QemuMonitorService : Service() {
         val metricsMap: StateFlow<Map<Long, VmMetrics>> = _metricsMap.asStateFlow()
 
         private val previousCpuTimes = ConcurrentHashMap<Long, Pair<Long, Long>>() // vmId -> (utime+stime, uptime)
-        private var pollingJob: Job? = null
+        private val previousNetBytes = ConcurrentHashMap<Long, Triple<Long, Long, Long>>() // vmId -> (rxBytes, txBytes, timestamp)
+        private val previousDiskBytes = ConcurrentHashMap<Long, Triple<Long, Long, Long>>() // vmId -> (rBytes, wBytes, timestamp)
+        private val lastPerfLogTimes = ConcurrentHashMap<Long, Long>()
 
-        fun startMonitoring(scope: CoroutineScope) {
+        private var pollingJob: Job? = null
+        private var appContext: Context? = null
+
+        fun startMonitoring(scope: CoroutineScope, context: Context? = null) {
+            if (context != null) appContext = context.applicationContext
             if (pollingJob?.isActive == true) return
             pollingJob = scope.launch(Dispatchers.IO) {
                 while (isActive) {
@@ -53,7 +63,7 @@ class QemuMonitorService : Service() {
                         Log.w(TAG, "Error in metrics poll: ${e.message}")
                         0
                     }
-                    // If no VMs are running, poll at a relaxed 3.5s interval to save battery and reduce kernel audit events
+                    // Poll at 2.0s when active, 3.5s when idle
                     delay(if (runningCount > 0) 2000L else 3500L)
                 }
             }
@@ -65,6 +75,9 @@ class QemuMonitorService : Service() {
         }
 
         private var procfsAccessible: Boolean? = null
+        private var procfsIoAccessible: Boolean? = null
+        private var procfsNetAccessible: Boolean? = null
+        private var procfsStatAccessible: Boolean? = null
 
         private suspend fun pollAllRunningVms(): Int {
             val runningIds = QemuManager.getRunningVmIds()
@@ -75,7 +88,15 @@ class QemuMonitorService : Service() {
             for (id in toRemove) {
                 val old = currentMap[id]
                 if (old != null && old.isRunning) {
-                    currentMap[id] = old.copy(isRunning = false, cpuPercent = 0f, status = "Stopped")
+                    currentMap[id] = old.copy(
+                        isRunning = false,
+                        cpuPercent = 0f,
+                        netRxKbps = 0f,
+                        netTxKbps = 0f,
+                        diskReadKbps = 0f,
+                        diskWriteKbps = 0f,
+                        status = "Stopped"
+                    )
                 }
             }
 
@@ -85,6 +106,8 @@ class QemuMonitorService : Service() {
                 }
                 return 0
             }
+
+            val now = System.currentTimeMillis()
 
             for (vmId in runningIds) {
                 val cfg = QemuManager.getVmConfig(vmId) ?: continue
@@ -111,7 +134,7 @@ class QemuMonitorService : Service() {
                     }
                 }
 
-                // 2. Process memory and CPU estimation via proc or pid
+                // 2. Process memory, CPU, Net & Disk I/O estimation
                 val pid = if (proc != null) {
                     try {
                         val field = proc.javaClass.getDeclaredField("pid")
@@ -127,6 +150,10 @@ class QemuMonitorService : Service() {
 
                 var rssMb = 0
                 var cpuPercent = 0f
+                var netRxKbps = 0f
+                var netTxKbps = 0f
+                var diskReadKbps = 0f
+                var diskWriteKbps = 0f
 
                 if (pid > 0 && procfsAccessible != false) {
                     // Read VmRSS from /proc/<pid>/status
@@ -141,7 +168,6 @@ class QemuMonitorService : Service() {
                                 }
                             }
                         } else {
-                            // If not readable (Android SELinux policy), disable procfs polling to avoid kernel audit spam
                             procfsAccessible = false
                         }
                     } catch (_: Exception) {
@@ -149,28 +175,84 @@ class QemuMonitorService : Service() {
                     }
 
                     // Read CPU usage from /proc/<pid>/stat if accessible
-                    if (procfsAccessible == true) {
+                    if (procfsAccessible == true && procfsStatAccessible != false) {
                         try {
                             val statFile = File("/proc/$pid/stat")
                             if (statFile.canRead()) {
+                                procfsStatAccessible = true
                                 val tokens = statFile.readText().trim().split("\\s+".toRegex())
                                 if (tokens.size > 14) {
                                     val utime = tokens[13].toLongOrNull() ?: 0L
                                     val stime = tokens[14].toLongOrNull() ?: 0L
                                     val totalTime = utime + stime
-                                    val now = System.currentTimeMillis()
 
                                     val prev = previousCpuTimes[vmId]
                                     if (prev != null) {
                                         val deltaWork = (totalTime - prev.first).coerceAtLeast(0)
                                         val deltaTimeMs = (now - prev.second).coerceAtLeast(1)
-                                        // 100 clock ticks per second standard in Linux
                                         cpuPercent = ((deltaWork * 1000f) / (deltaTimeMs * 100f) * 100f).coerceIn(0f, 100f)
                                     }
                                     previousCpuTimes[vmId] = Pair(totalTime, now)
                                 }
+                            } else {
+                                procfsStatAccessible = false
                             }
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) { procfsStatAccessible = false }
+
+                        // Read Disk I/O from /proc/<pid>/io
+                        if (procfsIoAccessible != false) {
+                            try {
+                                val ioFile = File("/proc/$pid/io")
+                                if (ioFile.canRead()) {
+                                    procfsIoAccessible = true
+                                    var rBytes = 0L
+                                    var wBytes = 0L
+                                    ioFile.forEachLine { line ->
+                                        if (line.startsWith("read_bytes:")) rBytes = line.substringAfter(":").trim().toLongOrNull() ?: 0L
+                                        else if (line.startsWith("write_bytes:")) wBytes = line.substringAfter(":").trim().toLongOrNull() ?: 0L
+                                    }
+                                    val prevDisk = previousDiskBytes[vmId]
+                                    if (prevDisk != null) {
+                                        val dtSec = ((now - prevDisk.third).coerceAtLeast(1)) / 1000f
+                                        diskReadKbps = (((rBytes - prevDisk.first).coerceAtLeast(0) / 1024f) / dtSec).coerceIn(0f, 500000f)
+                                        diskWriteKbps = (((wBytes - prevDisk.second).coerceAtLeast(0) / 1024f) / dtSec).coerceIn(0f, 500000f)
+                                    }
+                                    previousDiskBytes[vmId] = Triple(rBytes, wBytes, now)
+                                } else {
+                                    procfsIoAccessible = false
+                                }
+                            } catch (_: Exception) { procfsIoAccessible = false }
+                        }
+
+                        // Read Network RX/TX from /proc/net/dev or /proc/<pid>/net/dev
+                        if (procfsNetAccessible != false) {
+                            try {
+                                val netFile = listOf(File("/proc/$pid/net/dev"), File("/proc/net/dev")).firstOrNull { it.canRead() }
+                                if (netFile != null) {
+                                    procfsNetAccessible = true
+                                    var totalRx = 0L
+                                    var totalTx = 0L
+                                    netFile.forEachLine { line ->
+                                        if (line.contains(":") && !line.startsWith("lo:")) {
+                                            val parts = line.substringAfter(":").trim().split("\\s+".toRegex())
+                                            if (parts.size >= 9) {
+                                                totalRx += parts[0].toLongOrNull() ?: 0L
+                                                totalTx += parts[8].toLongOrNull() ?: 0L
+                                            }
+                                        }
+                                    }
+                                    val prevNet = previousNetBytes[vmId]
+                                    if (prevNet != null) {
+                                        val dtSec = ((now - prevNet.third).coerceAtLeast(1)) / 1000f
+                                        netRxKbps = (((totalRx - prevNet.first).coerceAtLeast(0) / 1024f) / dtSec).coerceIn(0f, 100000f)
+                                        netTxKbps = (((totalTx - prevNet.second).coerceAtLeast(0) / 1024f) / dtSec).coerceIn(0f, 100000f)
+                                    }
+                                    previousNetBytes[vmId] = Triple(totalRx, totalTx, now)
+                                } else {
+                                    procfsNetAccessible = false
+                                }
+                            } catch (_: Exception) { procfsNetAccessible = false }
+                        }
                     }
                 }
 
@@ -180,16 +262,36 @@ class QemuMonitorService : Service() {
                     else -> (cfg.ramMb * 0.35f).toInt()
                 }
 
+                val finalCpu = if (cpuPercent > 0) cpuPercent else (if (isAlive) 2.5f else 0f)
+
                 currentMap[vmId] = VmMetrics(
                     vmId = vmId,
-                    cpuPercent = if (cpuPercent > 0) cpuPercent else (if (isAlive) 2.5f else 0f),
+                    cpuPercent = finalCpu,
                     ramUsedMb = finalRam,
                     ramTotalMb = cfg.ramMb,
+                    netRxKbps = netRxKbps,
+                    netTxKbps = netTxKbps,
+                    diskReadKbps = diskReadKbps,
+                    diskWriteKbps = diskWriteKbps,
                     isRunning = isAlive,
                     status = monitorStatus,
                     pid = pid,
                     threads = cfg.cpuCores
                 )
+
+                // Periodic structured performance log (every 10 seconds)
+                val lastLog = lastPerfLogTimes[vmId] ?: 0L
+                if (now - lastLog > 10_000L) {
+                    lastPerfLogTimes[vmId] = now
+                    val perfMsg = String.format(
+                        java.util.Locale.US,
+                        "[PERF] CPU: %.1f%% (%d Cores) | RAM: %d/%d MB | Net: RX %.1f KB/s, TX %.1f KB/s | Disk: R %.1f KB/s, W %.1f KB/s",
+                        finalCpu, cfg.cpuCores, finalRam, cfg.ramMb, netRxKbps, netTxKbps, diskReadKbps, diskWriteKbps
+                    )
+                    appContext?.let { ctx ->
+                        QemuLogger.log(ctx, vmId, QemuLogger.LogEntry.Level.INFO, perfMsg)
+                    }
+                }
             }
 
             _metricsMap.value = currentMap
@@ -201,6 +303,7 @@ class QemuMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        appContext = applicationContext
         Log.i(TAG, "QemuMonitorService created")
     }
 

@@ -115,14 +115,25 @@ class MainActivity : AppCompatActivity() {
             onStart = { cfg -> launchVm(cfg) },
             onEdit = { cfg -> showEditDialog(cfg) },
             onStop = { cfg ->
-                QemuManager.stop(cfg.id)
-                Toast.makeText(this, "ВМ «${cfg.name}» остановлена", Toast.LENGTH_SHORT).show()
-                adapter.notifyDataSetChanged()
+                ConfirmationDialogHelper.show(
+                    context = this,
+                    title = "Остановить ВМ «${cfg.name}»?",
+                    message = "Выключение работающей виртуальной машины завершит все выполняющиеся в ней процессы и может привести к потере несохранённых данных внутри гостевой ОС.",
+                    details = "ВМ: ${cfg.name} (ID: ${cfg.id})",
+                    actionType = ConfirmationDialogHelper.ActionType.SHUTDOWN_VM,
+                    confirmText = "Выключить ВМ"
+                ) {
+                    QemuManager.stop(cfg.id)
+                    Toast.makeText(this, "ВМ «${cfg.name}» остановлена", Toast.LENGTH_SHORT).show()
+                    adapter.notifyDataSetChanged()
+                    binding.realtimeLogView.updateRunningStatus(false)
+                }
             },
             onRename = { cfg -> showRenameDialog(cfg) },
             onDelete = { cfg -> confirmDeleteVm(cfg) },
             onOptions = { cfg, anchor -> showCardPopupMenu(cfg, anchor) },
             onShowLogs = { cfg -> showLogsDialog(cfg) },
+            onShowSnapshots = { cfg -> showSnapshotDialog(cfg) },
             onLongClick = { cfg, anchor -> showCardPopupMenu(cfg, anchor) }
         )
         binding.recyclerVms.layoutManager = LinearLayoutManager(this)
@@ -149,11 +160,126 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             QemuMonitorService.metricsMap.collect { map ->
                 adapter.updateMetrics(map)
+                updateConsoleAndWarnings(map)
             }
         }
 
+        setupDashboardComponents()
+        setupQuickActions()
+
         refreshQemuBanner()
         checkAndPromptInstall()
+    }
+
+    private fun setupDashboardComponents() {
+        // Disk Usage Storage Growth Card
+        var isDiskExpanded = true
+        binding.btnToggleDiskUsage.setOnClickListener {
+            isDiskExpanded = !isDiskExpanded
+            binding.layoutDiskUsageBody.visibility = if (isDiskExpanded) View.VISIBLE else View.GONE
+            binding.btnToggleDiskUsage.text = if (isDiskExpanded) "▼ Свернуть" else "▲ Развернуть"
+        }
+        binding.headerDiskUsage.setOnClickListener {
+            binding.btnToggleDiskUsage.performClick()
+        }
+        binding.btnRefreshDiskUsage.setOnClickListener {
+            binding.chartDiskUsage.scanDisks(vms)
+            adapter.notifyDataSetChanged()
+            Toast.makeText(this, "Статистика хранилища обновлена", Toast.LENGTH_SHORT).show()
+        }
+        binding.chartDiskUsage.scanDisks(vms)
+
+        // Attach initial VM to real-time log viewer
+        val runningVm = vms.firstOrNull { QemuManager.isRunning(it.id) } ?: vms.firstOrNull()
+        if (runningVm != null) {
+            binding.realtimeLogView.attachVm(runningVm.id, runningVm.name, QemuManager.isRunning(runningVm.id))
+        }
+    }
+
+    private fun updateConsoleAndWarnings(metrics: Map<Long, QemuMonitorService.Companion.VmMetrics>) {
+        val runningVm = vms.firstOrNull { QemuManager.isRunning(it.id) }
+        if (runningVm != null) {
+            binding.realtimeLogView.attachVm(runningVm.id, runningVm.name, true)
+
+            val metric = metrics[runningVm.id]
+            if (metric != null && metric.cpuPercent > 92f) {
+                VmStateNotifier.notifyResourceWarning(this, runningVm.name, "CPU ${metric.cpuPercent.toInt()}%")
+            }
+        }
+    }
+
+    private fun setupQuickActions() {
+        binding.fabQuickActions.setOnClickListener { v ->
+            val runningVm = vms.firstOrNull { QemuManager.isRunning(it.id) }
+            val popup = PopupMenu(this, v)
+            val isRu = LocaleHelper.getLanguage(this) == LocaleHelper.LANG_RU
+
+            popup.menu.add(0, 1, 0, if (isRu) "⚡ Перезагрузить ВМ (Hard Reset)" else "⚡ Power Cycle (Hard Reset)")
+            popup.menu.add(0, 2, 1, if (isRu) "🔄 Принудительный перезапуск" else "🔄 Force Reboot")
+            popup.menu.add(0, 3, 2, if (isRu) "🖥 Открыть экран VNC" else "🖥 Open VNC Display")
+            popup.menu.add(0, 4, 3, if (isRu) "📸 Мгновенный снимок" else "📸 Take Snapshot")
+            popup.menu.add(0, 5, 4, if (isRu) "💻 Развернуть консоль логов" else "💻 Toggle Console Logs")
+
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> {
+                        if (runningVm != null && runningVm.monitorPort > 0) {
+                            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                QemuManager.executeMonitorCommand(runningVm.monitorPort, "system_reset")
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    Toast.makeText(this@MainActivity, if (isRu) "Команда system_reset отправлена" else "system_reset sent", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(this, if (isRu) "Нет активной запущенной ВМ" else "No running VM", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    2 -> {
+                        if (runningVm != null) {
+                            ConfirmationDialogHelper.show(
+                                context = this@MainActivity,
+                                title = if (isRu) "Перезапустить ВМ «${runningVm.name}»?" else "Restart VM «${runningVm.name}»?",
+                                message = if (isRu) "Виртуальная машина будет принудительно остановлена и запущена повторно." else "VM will be stopped and restarted.",
+                                actionType = ConfirmationDialogHelper.ActionType.SHUTDOWN_VM,
+                                confirmText = if (isRu) "Перезапустить" else "Restart"
+                            ) {
+                                QemuManager.stop(runningVm.id)
+                                launchVm(runningVm)
+                            }
+                        } else {
+                            Toast.makeText(this, if (isRu) "Нет активной запущенной ВМ" else "No running VM", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    3 -> {
+                        if (runningVm != null) {
+                            openVnc(runningVm)
+                        } else {
+                            Toast.makeText(this, if (isRu) "Нет активной запущенной ВМ" else "No running VM", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    4 -> {
+                        if (runningVm != null) {
+                            val tag = "snap_${System.currentTimeMillis()}"
+                            lifecycleScope.launch {
+                                val res = SnapshotManager.createSnapshot(this@MainActivity, runningVm, tag)
+                                if (res.isSuccess) {
+                                    VmStateNotifier.notifySnapshotSaved(this@MainActivity, runningVm.name, tag)
+                                } else {
+                                    Toast.makeText(this@MainActivity, res.exceptionOrNull()?.message, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        } else {
+                            Toast.makeText(this, if (isRu) "Нет активной запущенной ВМ" else "No running VM", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    5 -> {
+                        binding.realtimeLogView.findViewById<View>(R.id.btnToggleLogs)?.performClick()
+                    }
+                }
+                true
+            }
+            popup.show()
+        }
     }
 
     private fun saveVms() {
@@ -186,6 +312,13 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshQemuBanner()
         adapter.notifyDataSetChanged()
+        binding.chartDiskUsage.scanDisks(vms)
+        AutosaveManager.start(this) { vms }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        AutosaveManager.stop()
     }
 
     private fun checkAndPromptInstall() {
@@ -236,6 +369,18 @@ class MainActivity : AppCompatActivity() {
                 showLanguageDialog(isFirstLaunch = false)
                 true
             }
+            R.id.action_export_configs -> {
+                exportVmConfigs()
+                true
+            }
+            R.id.action_import_configs -> {
+                importVmConfigsDialog()
+                true
+            }
+            R.id.action_shortcuts -> {
+                ShortcutSettingsDialog.show(this)
+                true
+            }
             R.id.action_download -> {
                 val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://distrowatch.com/"))
                 startActivity(intent)
@@ -243,6 +388,10 @@ class MainActivity : AppCompatActivity() {
             }
             R.id.action_cleanup -> {
                 showCleanupDialog()
+                true
+            }
+            R.id.action_disk_manager -> {
+                showDiskManagerDialog()
                 true
             }
             R.id.action_install -> {
@@ -259,6 +408,59 @@ class MainActivity : AppCompatActivity() {
             }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun exportVmConfigs() {
+        val isRu = LocaleHelper.getLanguage(this) == LocaleHelper.LANG_RU
+        val json = VmRepository.exportVmsToJson(vms)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (isRu) "Экспорт конфигураций ВМ" else "Export VM Configurations")
+            .setMessage(if (isRu) "Сформирован JSON файл для ${vms.size} виртуальных машин.\nВыберите действие:" else "Generated JSON file for ${vms.size} virtual machines.\nChoose action:")
+            .setPositiveButton(if (isRu) "Скопировать JSON" else "Copy JSON") { _, _ ->
+                val clip = android.content.ClipData.newPlainText("VM Configs", json)
+                (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+                Toast.makeText(this, if (isRu) "JSON скопирован в буфер обмена" else "JSON copied to clipboard", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(if (isRu) "Поделиться" else "Share") { _, _ ->
+                val sendIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    putExtra(Intent.EXTRA_TEXT, json)
+                    putExtra(Intent.EXTRA_TITLE, "virtual_pc_vms_backup.json")
+                    type = "application/json"
+                }
+                startActivity(Intent.createChooser(sendIntent, "Export VM Configs"))
+            }
+            .setNegativeButton(R.string.lang_btn_cancel, null)
+            .show()
+    }
+
+    private fun importVmConfigsDialog() {
+        val isRu = LocaleHelper.getLanguage(this) == LocaleHelper.LANG_RU
+        val input = EditText(this).apply {
+            hint = if (isRu) "Вставьте содержимое JSON конфигурации..." else "Paste VM configuration JSON here..."
+            setPadding(40, 30, 40, 20)
+            maxLines = 8
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (isRu) "Импорт конфигураций ВМ" else "Import VM Configurations")
+            .setView(input)
+            .setPositiveButton(if (isRu) "Импортировать" else "Import") { _, _ ->
+                val text = input.text.toString().trim()
+                if (text.isNotEmpty()) {
+                    val imported = VmRepository.parseVmsFromJson(text, assignNewIds = true)
+                    if (imported.isNotEmpty()) {
+                        vms.addAll(imported)
+                        adapter.notifyDataSetChanged()
+                        saveVms()
+                        Toast.makeText(this, if (isRu) "Успешно импортировано ВМ: ${imported.size}" else "Successfully imported ${imported.size} VMs", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, if (isRu) "Некорректный JSON формат" else "Invalid JSON format", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.lang_btn_cancel, null)
+            .show()
     }
 
     private fun showLanguageDialog(isFirstLaunch: Boolean) {
@@ -358,6 +560,10 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showDiskManagerDialog() {
+        DiskManagerDialog.show(this, lifecycleScope)
+    }
+
     private fun showSystemSettingsDialog() {
         val appSettings = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val layout = LinearLayout(this).apply {
@@ -431,22 +637,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun launchVm(cfg: VmConfig) {
         val bin = QemuManager.findBinary(this, cfg.architecture)
+        val isRu = LocaleHelper.getLanguage(this) == LocaleHelper.LANG_RU
         if (bin == null) {
             MaterialAlertDialogBuilder(this)
-                .setTitle("Бинарник QEMU не найден")
-                .setMessage("Для архитектуры «${cfg.architecture.label}» (${cfg.architecture.binary}) пакет не загружен.\n\nОткрыть менеджер установки?")
-                .setPositiveButton("Установить") { _, _ ->
+                .setTitle(if (isRu) "Бинарник QEMU не найден" else "QEMU Binary Not Found")
+                .setMessage(if (isRu) "Для архитектуры «${cfg.architecture.label}» (${cfg.architecture.binary}) пакет не загружен.\n\nОткрыть менеджер установки?" else "QEMU package for architecture «${cfg.architecture.label}» (${cfg.architecture.binary}) is not downloaded.\n\nOpen installation manager?")
+                .setPositiveButton(if (isRu) "Установить" else "Install") { _, _ ->
                     startActivity(Intent(this, InstallActivity::class.java))
                 }
-                .setNegativeButton("Отмена", null)
+                .setNegativeButton(R.string.lang_btn_cancel, null)
                 .show()
             return
         }
 
+        VmStateNotifier.notifyBooting(this, cfg.name)
+
         val logLines = StringBuilder()
         val progressDialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Запуск ВМ «${cfg.name}»")
-            .setMessage("Инициализация QEMU...")
+            .setTitle(if (isRu) "Запуск ВМ «${cfg.name}»" else "Launching VM «${cfg.name}»")
+            .setMessage(if (isRu) "Инициализация QEMU..." else "Initializing QEMU...")
             .setCancelable(false)
             .create()
         progressDialog.show()
@@ -460,7 +669,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                progressDialog.setMessage("Ожидание VNC-сервера на порту ${cfg.vncPort}...")
+                progressDialog.setMessage(if (isRu) "Ожидание VNC-сервера на порту ${cfg.vncPort}..." else "Waiting for VNC server on port ${cfg.vncPort}...")
                 val vncReady = QemuManager.waitForVnc(
                     vmId = cfg.id,
                     host = "127.0.0.1",
@@ -472,24 +681,26 @@ class MainActivity : AppCompatActivity() {
 
                 if (!vncReady) {
                     val exitCode = QemuManager.getExitCode(cfg.id)
-                    val extraMsg = if (exitCode != null) "\n(Процесс завершился с кодом $exitCode)" else ""
+                    val extraMsg = if (exitCode != null) "\n(Exit code: $exitCode)" else ""
                     MaterialAlertDialogBuilder(this@MainActivity)
-                        .setTitle("VNC ещё не готов")
-                        .setMessage("Сервер VNC пока не отвечает на 127.0.0.1:${cfg.vncPort}$extraMsg.\n\nВывод QEMU:\n${logLines.takeLast(1200)}")
-                        .setPositiveButton("Открыть VNC всё равно") { _, _ -> openVnc(cfg) }
-                        .setNeutralButton("Посмотреть логи") { _, _ -> showLogsDialog(cfg) }
-                        .setNegativeButton("Отмена", null)
+                        .setTitle(if (isRu) "VNC ещё не готов" else "VNC Not Ready")
+                        .setMessage(if (isRu) "Сервер VNC пока не отвечает на 127.0.0.1:${cfg.vncPort}$extraMsg.\n\nВывод QEMU:\n${logLines.takeLast(1200)}" else "VNC server is not yet responding on 127.0.0.1:${cfg.vncPort}$extraMsg.\n\nQEMU output:\n${logLines.takeLast(1200)}")
+                        .setPositiveButton(if (isRu) "Открыть VNC всё равно" else "Open VNC Anyway") { _, _ -> openVnc(cfg) }
+                        .setNeutralButton(if (isRu) "Посмотреть логи" else "View Logs") { _, _ -> showLogsDialog(cfg) }
+                        .setNegativeButton(R.string.lang_btn_cancel, null)
                         .show()
                     return@launch
                 }
 
+                VmStateNotifier.notifyRunning(this@MainActivity, cfg.name)
                 openVnc(cfg)
 
             } catch (e: Exception) {
                 progressDialog.dismiss()
                 adapter.notifyDataSetChanged()
+                VmStateNotifier.notifyError(this@MainActivity, cfg.name, e.message ?: "Failed")
                 MaterialAlertDialogBuilder(this@MainActivity)
-                    .setTitle("Ошибка запуска QEMU")
+                    .setTitle(if (isRu) "Ошибка запуска QEMU" else "QEMU Launch Error")
                     .setMessage("${e.message}\n\n${logLines.takeLast(600)}")
                     .setPositiveButton("OK", null)
                     .show()
@@ -557,32 +768,33 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Удалить ВМ «${cfg.name}»?")
-            .setMessage("Конфигурация ВМ будет удалена из списка.")
-            .setPositiveButton("Удалить ВМ") { _, _ ->
-                val idx = vms.indexOfFirst { it.id == cfg.id }
-                if (idx >= 0) {
-                    vms.removeAt(idx)
-                    adapter.notifyItemRemoved(idx)
-                    saveVms()
-                    Toast.makeText(this, "ВМ удалена", Toast.LENGTH_SHORT).show()
-                }
+        val hasDisk = cfg.diskPath.isNotBlank() && File(cfg.diskPath).exists()
+        val diskDetails = if (hasDisk) {
+            val sizeMb = File(cfg.diskPath).length() / (1024 * 1024)
+            "Файл диска: ${cfg.diskPath} ($sizeMb МБ)"
+        } else "Конфигурация ВМ (без отдельного диска)"
+
+        ConfirmationDialogHelper.show(
+            context = this,
+            title = "Удалить ВМ «${cfg.name}»?",
+            message = "Конфигурация виртуальной машины будет безвозвратно удалена из списка." +
+                    (if (hasDisk) " Связанный образ диска также будет стерт с устройства." else ""),
+            details = diskDetails,
+            actionType = ConfirmationDialogHelper.ActionType.DELETE_VM,
+            confirmText = if (hasDisk) "Удалить ВМ и диск" else "Удалить ВМ"
+        ) {
+            if (hasDisk) {
+                try { File(cfg.diskPath).delete() } catch (_: Exception) {}
             }
-            .setNeutralButton("Удалить с диском") { _, _ ->
-                if (cfg.diskPath.isNotBlank()) {
-                    try { File(cfg.diskPath).delete() } catch (_: Exception) {}
-                }
-                val idx = vms.indexOfFirst { it.id == cfg.id }
-                if (idx >= 0) {
-                    vms.removeAt(idx)
-                    adapter.notifyItemRemoved(idx)
-                    saveVms()
-                    Toast.makeText(this, "ВМ и образ диска удалены", Toast.LENGTH_SHORT).show()
-                }
+            val idx = vms.indexOfFirst { it.id == cfg.id }
+            if (idx >= 0) {
+                vms.removeAt(idx)
+                adapter.notifyItemRemoved(idx)
+                saveVms()
+                binding.chartDiskUsage.scanDisks(vms)
+                Toast.makeText(this, "ВМ удалена", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("Отмена", null)
-            .show()
+        }
     }
 
     private fun cloneVm(cfg: VmConfig) {
@@ -691,7 +903,7 @@ class MainActivity : AppCompatActivity() {
         val tvRamValue = view.findViewById<TextView>(R.id.tvRamValue)
         val sliderCpu = view.findViewById<Slider>(R.id.sliderCpu)
         val tvCpuValue = view.findViewById<TextView>(R.id.tvCpuValue)
-        val etCpuModel = view.findViewById<TextInputEditText>(R.id.etCpuModel)
+        val etCpuModel = view.findViewById<android.widget.AutoCompleteTextView>(R.id.etCpuModel)
         val sliderDiskSize = view.findViewById<Slider>(R.id.sliderDiskSize)
         val tvDiskSizeValue = view.findViewById<TextView>(R.id.tvDiskSizeValue)
         val etDisk = view.findViewById<TextInputEditText>(R.id.etDisk)
@@ -704,6 +916,7 @@ class MainActivity : AppCompatActivity() {
         val spinVga = view.findViewById<Spinner>(R.id.spinVga)
         val spinNetAdapter = view.findViewById<Spinner>(R.id.spinNetworkAdapter)
         val spinInputDevice = view.findViewById<Spinner>(R.id.spinInputDevice)
+        val spinMouseMode = view.findViewById<Spinner>(R.id.spinMouseMode)
 
         val switchAudio = view.findViewById<MaterialSwitch>(R.id.switchAudio)
         val switchKvm = view.findViewById<MaterialSwitch>(R.id.switchKvm)
@@ -711,7 +924,7 @@ class MainActivity : AppCompatActivity() {
         val spinPreset = view.findViewById<Spinner>(R.id.spinPreset)
 
         etName.setText(initial.name)
-        etCpuModel.setText(initial.cpuModel)
+        etCpuModel.setText(initial.cpuModel, false)
         etDisk.setText(initial.diskPath)
         etIso.setText(initial.isoPath)
         etExtraArgs.setText(initial.extraArgs)
@@ -747,6 +960,23 @@ class MainActivity : AppCompatActivity() {
         val archValues = Architecture.values()
         spinArch.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, archValues.map { it.label })
         spinArch.setSelection(archValues.indexOf(initial.architecture).coerceAtLeast(0))
+        
+        spinArch.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selectedArch = archValues[position]
+                val cpuOptions = when (selectedArch) {
+                    Architecture.X86_64 -> listOf("max", "host", "qemu64", "core2duo", "Nehalem", "SandyBridge", "Haswell", "Broadwell", "Skylake-Client", "Skylake-Server", "Cascadelake-Server", "EPYC", "EPYC-Rome", "EPYC-Milan", "Opteron_G1", "phenom", "KnightsMill")
+                    Architecture.I386 -> listOf("max", "host", "qemu32", "pentium", "pentium2", "pentium3", "coreduo", "486", "athlon")
+                    Architecture.ARM64 -> listOf("max", "host", "cortex-a53", "cortex-a57", "cortex-a72", "cortex-a76", "neoverse-n1")
+                    Architecture.ARM -> listOf("max", "cortex-a15", "cortex-a9", "cortex-a8", "cortex-a7", "arm1176")
+                    Architecture.RISCV64, Architecture.RISCV32 -> listOf("max", "rv64", "rv32", "sifive-u54", "sifive-e51")
+                    Architecture.POWERPC, Architecture.PPC64 -> listOf("max", "G4", "7400", "POWER8", "POWER9", "e500mc")
+                    Architecture.M68K -> listOf("max", "m68040", "m68060", "any")
+                }
+                etCpuModel.setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, cpuOptions))
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
 
         val machValues = MachineType.values()
         spinMach.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, machValues.map { "${it.value} (${it.displayName})" })
@@ -756,8 +986,8 @@ class MainActivity : AppCompatActivity() {
         spinBoot.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, bootValues)
         spinBoot.setSelection(if (initial.bootDevice == "cdrom") 1 else 0)
 
-        val vgaValues = listOf("std (Стандартный)", "virtio (Ускоренный)", "cirrus (Совместимый)", "none (Отключить)")
-        val vgaKeys = listOf("std", "virtio", "cirrus", "none")
+        val vgaValues = listOf("std (Стандартный)", "virtio (Ускоренный 2D/3D)", "cirrus (Для Windows 9x/XP)", "qxl (SPICE)", "vmware (VMware SVGA)", "ramfb (Только буфер)", "bochs-display", "none (Отключить)")
+        val vgaKeys = listOf("std", "virtio", "cirrus", "qxl", "vmware", "ramfb", "bochs-display", "none")
         spinVga.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, vgaValues)
         spinVga.setSelection(vgaKeys.indexOf(initial.vgaDriver).coerceAtLeast(0))
 
@@ -782,99 +1012,41 @@ class MainActivity : AppCompatActivity() {
         spinInputDevice.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, inputDeviceLabels)
         spinInputDevice.setSelection(inputDevices.indexOf(initial.inputDevice).coerceAtLeast(0))
 
-        // Preset selector logic
-        val presets = listOf(
-            "Пользовательский / Custom",
-            "Windows XP (x86 32-bit)",
-            "Windows 7 / 10 (x86_64)",
-            "Windows 11 (x86_64 Q35)",
-            "Ubuntu / Debian (ARM64 Virt)",
-            "Alpine Linux (x86_64)",
-            "Debian GNU/Linux (RISC-V 64)",
-            "Mac OS 9 (PowerPC Mac99)"
+        val mouseModes = listOf("absolute", "relative")
+        val mouseModeLabels = listOf(
+            getString(R.string.vnc_mode_absolute),
+            getString(R.string.vnc_mode_relative)
         )
-        spinPreset.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, presets)
+        spinMouseMode.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, mouseModeLabels)
+        spinMouseMode.setSelection(if (initial.mouseMode.equals("relative", ignoreCase = true)) 1 else 0)
+
+        // Preset selector logic
+        val presetList = QemuPresetLibrary.PRESETS
+        val presetsStr = listOf("Пользовательский / Custom") + presetList.map { it.name }
+        
+        spinPreset.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, presetsStr)
         spinPreset.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
-                when (position) {
-                    1 -> { // Win XP
-                        spinArch.setSelection(archValues.indexOf(Architecture.I386))
-                        spinMach.setSelection(machValues.indexOf(MachineType.PC))
-                        sliderRam.value = 512f; tvRamValue.text = "512 MB"
-                        sliderCpu.value = 1f; tvCpuValue.text = "1"
-                        sliderDiskSize.value = 10f; tvDiskSizeValue.text = "10 GB"
-                        etCpuModel.setText("pentium3")
-                        spinVga.setSelection(0) // std
-                        spinNetAdapter.setSelection(0) // rtl8139
-                        spinInputDevice.setSelection(0) // usb-tablet
-                    }
-                    2 -> { // Win 7/10
-                        spinArch.setSelection(archValues.indexOf(Architecture.X86_64))
-                        spinMach.setSelection(machValues.indexOf(MachineType.Q35))
-                        sliderRam.value = 2048f; tvRamValue.text = "2048 MB"
-                        sliderCpu.value = 2f; tvCpuValue.text = "2"
-                        sliderDiskSize.value = 30f; tvDiskSizeValue.text = "30 GB"
-                        etCpuModel.setText("max")
-                        spinVga.setSelection(0)
-                        spinNetAdapter.setSelection(2) // e1000
-                        spinInputDevice.setSelection(0) // usb-tablet
-                    }
-                    3 -> { // Win 11
-                        spinArch.setSelection(archValues.indexOf(Architecture.X86_64))
-                        spinMach.setSelection(machValues.indexOf(MachineType.Q35))
-                        sliderRam.value = 4096f; tvRamValue.text = "4096 MB"
-                        sliderCpu.value = 4f; tvCpuValue.text = "4"
-                        sliderDiskSize.value = 50f; tvDiskSizeValue.text = "50 GB"
-                        etCpuModel.setText("max")
-                        spinVga.setSelection(0)
-                        spinNetAdapter.setSelection(2) // e1000
-                        spinInputDevice.setSelection(0) // usb-tablet
-                    }
-                    4 -> { // Ubuntu ARM64
-                        spinArch.setSelection(archValues.indexOf(Architecture.ARM64))
-                        spinMach.setSelection(machValues.indexOf(MachineType.VIRT))
-                        sliderRam.value = 2048f; tvRamValue.text = "2048 MB"
-                        sliderCpu.value = 2f; tvCpuValue.text = "2"
-                        sliderDiskSize.value = 20f; tvDiskSizeValue.text = "20 GB"
-                        etCpuModel.setText("cortex-a57")
-                        spinVga.setSelection(1) // virtio
-                        spinNetAdapter.setSelection(1) // virtio-net-pci
-                        spinInputDevice.setSelection(1) // virtio-tablet
-                    }
-                    5 -> { // Alpine Linux
-                        spinArch.setSelection(archValues.indexOf(Architecture.X86_64))
-                        spinMach.setSelection(machValues.indexOf(MachineType.PC))
-                        sliderRam.value = 512f; tvRamValue.text = "512 MB"
-                        sliderCpu.value = 1f; tvCpuValue.text = "1"
-                        sliderDiskSize.value = 5f; tvDiskSizeValue.text = "5 GB"
-                        etCpuModel.setText("max")
-                        spinVga.setSelection(0)
-                        spinNetAdapter.setSelection(1) // virtio-net-pci
-                        spinInputDevice.setSelection(0) // usb-tablet
-                    }
-                    6 -> { // RISC-V
-                        spinArch.setSelection(archValues.indexOf(Architecture.RISCV64))
-                        spinMach.setSelection(machValues.indexOf(MachineType.VIRT))
-                        sliderRam.value = 1024f; tvRamValue.text = "1024 MB"
-                        sliderCpu.value = 2f; tvCpuValue.text = "2"
-                        sliderDiskSize.value = 10f; tvDiskSizeValue.text = "10 GB"
-                        etCpuModel.setText("max")
-                        spinVga.setSelection(1)
-                        spinNetAdapter.setSelection(1)
-                        spinInputDevice.setSelection(0)
-                    }
-                    7 -> { // Mac OS 9 PPC
-                        spinArch.setSelection(archValues.indexOf(Architecture.POWERPC))
-                        spinMach.setSelection(machValues.indexOf(MachineType.MAC99))
-                        sliderRam.value = 512f; tvRamValue.text = "512 MB"
-                        sliderCpu.value = 1f; tvCpuValue.text = "1"
-                        sliderDiskSize.value = 10f; tvDiskSizeValue.text = "10 GB"
-                        etCpuModel.setText("g4")
-                        spinVga.setSelection(0)
-                        spinNetAdapter.setSelection(0)
-                        spinInputDevice.setSelection(2) // ps2
-                    }
-                }
+                if (position == 0) return // Custom
+                
+                val preset = presetList[position - 1]
+                spinArch.setSelection(archValues.indexOf(preset.architecture))
+                spinMach.setSelection(machValues.indexOf(preset.machineType))
+                
+                sliderRam.value = preset.ramMb.coerceIn(128, 8192).toFloat()
+                tvRamValue.text = "${preset.ramMb} MB"
+                
+                etCpuModel.setText(preset.cpuModel, false)
+                
+                spinVga.setSelection(vgaKeys.indexOf(preset.vgaDriver).coerceAtLeast(0))
+                
+                val netIndex = if (preset.networkAdapter == "none") 4 else netAdapters.indexOf(preset.networkAdapter).coerceIn(0, 3)
+                spinNetAdapter.setSelection(netIndex)
+                
+                switchAudio.isChecked = preset.enableAudio
+                
+                // Advanced Arguments
+                etExtraArgs.setText(preset.extraArgs)
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
@@ -926,10 +1098,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        MaterialAlertDialogBuilder(this)
-            .setTitle(if (initial.id == 0L || initial.name == "Новая ВМ") getString(R.string.vm_title_new) else "${getString(R.string.menu_settings)} «${initial.name}»")
-            .setView(view)
-            .setPositiveButton(R.string.vm_btn_save) { _, _ ->
+        // Pick QEMU Flags Button
+        val btnPickQemuFlags = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPickQemuFlags)
+        btnPickQemuFlags?.setOnClickListener {
+            QemuFlagPickerDialog.show(this) { selectedFlag ->
+                val current = etExtraArgs.text?.toString().orEmpty().trim()
+                if (current.isEmpty()) {
+                    etExtraArgs.setText(selectedFlag)
+                } else {
+                    etExtraArgs.setText("$current $selectedFlag")
+                }
+            }
+        }
+
+        var isSaved = false
+        val saveAction = {
+            if (!isSaved) {
+                isSaved = true
                 val chosenArch = archValues[spinArch.selectedItemPosition]
                 val chosenMach = machValues[spinMach.selectedItemPosition]
                 val chosenBoot = if (spinBoot.selectedItemPosition == 1) "cdrom" else "disk"
@@ -941,6 +1126,7 @@ class MainActivity : AppCompatActivity() {
                     Pair("user", chosenNetItem)
                 }
                 val chosenInputDevice = inputDevices[spinInputDevice.selectedItemPosition]
+                val chosenMouseMode = mouseModes[spinMouseMode.selectedItemPosition]
 
                 onSave(
                     initial.copy(
@@ -956,6 +1142,7 @@ class MainActivity : AppCompatActivity() {
                         networkMode = chosenNetMode,
                         networkAdapter = chosenNetAdapter,
                         inputDevice = chosenInputDevice,
+                        mouseMode = chosenMouseMode,
                         enableAudio = switchAudio.isChecked,
                         enableUsbTablet = chosenInputDevice == "usb-tablet",
                         enableMtcg = switchMtcg?.isChecked ?: true,
@@ -966,7 +1153,13 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
             }
-            .setNegativeButton(R.string.lang_btn_cancel, null)
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (initial.id == 0L || initial.name == "Новая ВМ") getString(R.string.vm_title_new) else "${getString(R.string.menu_settings)} «${initial.name}»")
+            .setView(view)
+            .setPositiveButton("Закрыть") { _, _ -> saveAction() }
+            .setOnDismissListener { saveAction() }
             .show()
     }
 
@@ -987,6 +1180,7 @@ class VmAdapter(
     private val onDelete: (VmConfig) -> Unit,
     private val onOptions: (VmConfig, View) -> Unit,
     private val onShowLogs: (VmConfig) -> Unit,
+    private val onShowSnapshots: (VmConfig) -> Unit,
     private val onLongClick: (VmConfig, View) -> Unit
 ) : RecyclerView.Adapter<VmAdapter.VH>() {
 
@@ -1051,6 +1245,30 @@ class VmAdapter(
                 if (running) R.color.chip_running else R.color.chip_stopped
             )
 
+            // Disk storage usage & growth
+            val diskFile = if (cfg.diskPath.isNotBlank()) File(cfg.diskPath) else null
+            if (diskFile != null && diskFile.exists()) {
+                layoutVmDiskStorage.visibility = View.VISIBLE
+                val actualBytes = diskFile.length()
+                val actualMb = actualBytes / (1024f * 1024f)
+                val virtualGb = cfg.diskSizeGb.coerceAtLeast(1)
+                val virtualBytes = virtualGb * 1024L * 1024L * 1024L
+                val percent = if (virtualBytes > 0) ((actualBytes.toFloat() / virtualBytes.toFloat()) * 100f).toInt().coerceIn(1, 100) else 0
+
+                val format = if (cfg.diskPath.endsWith(".qcow2", true)) "QCOW2" else cfg.diskFormat.uppercase(java.util.Locale.US)
+                tvVmDiskStorage.text = if (actualMb >= 1024f) {
+                    String.format(java.util.Locale.US, "💽 %s: %.2f GB / %d GB (%d%%)", format, actualMb / 1024f, virtualGb, percent)
+                } else {
+                    String.format(java.util.Locale.US, "💽 %s: %.1f MB / %d GB (%d%%)", format, actualMb, virtualGb, percent)
+                }
+                pbVmDiskGrowth.progress = percent
+                pbVmDiskGrowth.progressTintList = android.content.res.ColorStateList.valueOf(
+                    if (percent > 85) android.graphics.Color.parseColor("#FF5252") else android.graphics.Color.parseColor("#80D8FF")
+                )
+            } else {
+                layoutVmDiskStorage.visibility = View.GONE
+            }
+
             // Real-time metrics sparkline chart
             val metric = metricsMap[cfg.id]
             if (running && metric != null && metric.isRunning) {
@@ -1063,13 +1281,23 @@ class VmAdapter(
 
             btnStart.isEnabled = !running
             btnStop.isEnabled = running
-            btnStart.setOnClickListener { onStart(cfg) }
-            btnStop.setOnClickListener { onStop(cfg) }
+            btnStart.setOnClickListener {
+                it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                onStart(cfg) 
+            }
+            btnStop.setOnClickListener {
+                it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                onStop(cfg) 
+            }
             btnRename.setOnClickListener { onRename(cfg) }
             btnEdit.setOnClickListener { onEdit(cfg) }
             btnDelete.setOnClickListener { onDelete(cfg) }
             btnOptions.setOnClickListener { onOptions(cfg, it) }
             btnLogs.setOnClickListener { onShowLogs(cfg) }
+            
+            val btnSnapshots = root.findViewById<View>(R.id.btnSnapshots)
+            btnSnapshots?.setOnClickListener { onShowSnapshots(cfg) }
+            
             root.setOnLongClickListener {
                 onLongClick(cfg, it)
                 true

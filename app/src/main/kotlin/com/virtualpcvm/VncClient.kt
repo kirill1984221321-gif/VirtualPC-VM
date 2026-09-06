@@ -36,6 +36,7 @@ class VncClient(
         fun onFramebufferUpdate(x: Int, y: Int, w: Int, h: Int, pixels: IntArray) {}
         fun onDesktopSizeChanged(width: Int, height: Int) {}
         fun onConnectingProgress(attempt: Int, maxAttempts: Int) {}
+        fun onServerCutText(text: String) {}
     }
 
     private val listeners = CopyOnWriteArrayList<Listener>()
@@ -56,6 +57,7 @@ class VncClient(
     var onFramebufferUpdate: ((x: Int, y: Int, w: Int, h: Int, pixels: IntArray) -> Unit)? = null
     var onDesktopSizeChanged: ((width: Int, height: Int) -> Unit)? = null
     var onConnectingProgress: ((attempt: Int, maxAttempts: Int) -> Unit)? = null
+    var onServerCutText: ((text: String) -> Unit)? = null
     var isProcessAliveCheck: (() -> Boolean)? = null
 
     var fbWidth = 0
@@ -349,10 +351,30 @@ class VncClient(
         val din = input ?: return
         val buf = ByteArray(3)
         din.readFully(buf)
-        val len = din.readInt().coerceIn(0, 65536)
+        val len = din.readInt().coerceIn(0, 1024 * 1024) // up to 1MB
         if (len > 0) {
-            val text = ByteArray(len)
-            din.readFully(text)
+            val textBytes = ByteArray(len)
+            din.readFully(textBytes)
+            val str = try {
+                String(textBytes, java.nio.charset.StandardCharsets.UTF_8)
+            } catch (_: Exception) {
+                String(textBytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+            }
+            notifyServerCutText(str)
+        }
+    }
+
+    fun sendClientCutText(text: String) {
+        val dout = output ?: return
+        val bytes = text.toByteArray(java.nio.charset.StandardCharsets.ISO_8859_1)
+        synchronized(dout) {
+            try {
+                dout.writeByte(6) // ClientCutText message type
+                dout.write(ByteArray(3)) // 3 padding bytes
+                dout.writeInt(bytes.size)
+                dout.write(bytes)
+                dout.flush()
+            } catch (_: Exception) {}
         }
     }
 
@@ -464,5 +486,10 @@ class VncClient(
     private fun notifyProgress(attempt: Int, maxAttempts: Int) {
         onConnectingProgress?.invoke(attempt, maxAttempts)
         for (l in listeners) l.onConnectingProgress(attempt, maxAttempts)
+    }
+
+    private fun notifyServerCutText(text: String) {
+        onServerCutText?.invoke(text)
+        for (l in listeners) l.onServerCutText(text)
     }
 }

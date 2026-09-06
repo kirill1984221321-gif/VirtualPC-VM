@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardVirtualKeyboard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="#F010141C"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="12dp"
+    app:strokeWidth="1.5dp"
+    app:strokeColor="#5580D8FF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <!-- Top Header & Tabs -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⌨"
+                android:textSize="16sp"
+                android:layout_marginEnd="6dp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/vk_title"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- Hold time indicator / toggle -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnVkHoldTime"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:text="40ms"
+                android:textSize="10sp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp"
+                android:layout_marginEnd="4dp" />
+
+            <!-- Close keyboard -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnVkClose"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="32dp"
+                android:layout_height="30dp"
+                android:text="✕"
+                android:textColor="#8892B0"
+                android:textSize="14sp"
+                android:minWidth="0dp"
+                android:padding="0dp" />
+        </LinearLayout>
+
+        <!-- Modifier Latch Bar (Ctrl, Alt, Shift, Win) + Tabs -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLatchCtrl"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="CTRL"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:paddingHorizontal="2dp"
+                android:layout_marginEnd="2dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLatchAlt"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="ALT"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:paddingHorizontal="2dp"
+                android:layout_marginEnd="2dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLatchShift"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="SHIFT"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:paddingHorizontal="2dp"
+                android:layout_marginEnd="2dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLatchWin"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:text="WIN ❖"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:paddingHorizontal="2dp" />
+        </LinearLayout>
+
+        <!-- Category Tabs -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginBottom="6dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tabVkQuick"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/vk_tab_quick"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:layout_marginEnd="4dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tabVkQwerty"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/vk_tab_qwerty"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:layout_marginEnd="4dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tabVkCyrillic"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/vk_tab_cyrillic"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:layout_marginEnd="4dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tabVkFKeys"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/vk_tab_fkeys"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:layout_marginEnd="4dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tabVkNav"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:text="@string/vk_tab_nav"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- Dynamic Container for Selected Tab Content -->
+        <FrameLayout
+            android:id="@+id/containerVkContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="140dp" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Virtual PC VM</string>
     <string name="title_main">Мои виртуальные машины</string>
-    <string name="search_hint">Поиск машин…</string>
+    <string name="search_hint">Поиск виртуальных машин…</string>
     <string name="fab_create_vm">Создать ВМ</string>
 
     <!-- Language Selection -->
@@ -16,122 +16,182 @@
     <string name="lang_btn_cancel">Отмена</string>
 
     <!-- VM Card & States -->
-    <string name="btn_start">Старт</string>
-    <string name="btn_stop">Стоп</string>
+    <string name="btn_start">Запустить</string>
+    <string name="btn_stop">Остановить</string>
     <string name="btn_back">Назад</string>
     <string name="btn_keyboard">Клавиатура</string>
     <string name="btn_ctrl_alt_del">Ctrl+Alt+Del</string>
-    <string name="status_running">Запущена</string>
+    <string name="status_running">Работает</string>
     <string name="status_stopped">Остановлена</string>
     <string name="btn_rename">Переименовать</string>
     <string name="btn_delete">Удалить</string>
     <string name="btn_edit">Настройки</string>
     <string name="btn_clone">Дублировать</string>
     <string name="btn_logs">Логи</string>
-    <string name="btn_vnc">VNC Экран</string>
-    <string name="btn_snapshots">Снапшоты (qcow2)</string>
-    <string name="btn_share_config">Поделиться конфигом</string>
-    <string name="btn_monitor">Мониторинг системы</string>
+    <string name="btn_vnc">Экран VNC</string>
+    <string name="btn_snapshots">Снимки (qcow2)</string>
+    <string name="btn_share_config">Поделиться</string>
+    <string name="btn_monitor">Мониторинг</string>
     <string name="menu_guide">Руководство пользователя</string>
 
     <!-- Hardware Settings Panel -->
-    <string name="hw_title">Аппаратные параметры ВМ</string>
+    <string name="hw_title">Параметры оборудования</string>
     <string name="hw_general_section">Основное и процессор</string>
     <string name="hw_vm_name">Название виртуальной машины</string>
-    <string name="hw_preset">Быстрый шаблон (пресет)</string>
+    <string name="hw_preset">Быстрый шаблон конфигурации</string>
     <string name="hw_arch">Архитектура</string>
-    <string name="hw_machine">Тип платформы</string>
-    <string name="hw_memory_slider">Выделенная оперативная память (RAM)</string>
-    <string name="hw_cpu_slider">Количество ядер CPU</string>
-    <string name="hw_cpu_model">Модель процессора (max, host, cortex-a57)</string>
+    <string name="hw_machine">Тип платформы (Machine)</string>
+    <string name="hw_memory_slider">Выделенная память (RAM)</string>
+    <string name="hw_cpu_slider">Ядра процессора (CPU)</string>
+    <string name="hw_cpu_model">Модель CPU (напр. max, host, cortex-a57)</string>
     <string name="hw_storage_section">Накопители и носители</string>
     <string name="hw_disk_size_slider">Размер виртуального диска</string>
-    <string name="hw_disk_file">Файл виртуального диска</string>
-    <string name="hw_iso_file">Образ CD-ROM / ISO</string>
-    <string name="hw_btn_create_disk">Создать диск</string>
+    <string name="hw_disk_file">Путь к файлу диска</string>
+    <string name="hw_iso_file">Путь к образу CD/ISO</string>
+    <string name="hw_btn_create_disk">Создать новый диск</string>
     <string name="hw_btn_browse_iso">Выбрать ISO</string>
-    <string name="hw_boot_device">Первичное устройство загрузки</string>
+    <string name="hw_boot_device">Устройство загрузки</string>
     <string name="hw_devices_section">Периферия и сеть</string>
     <string name="hw_vga_adapter">Видеоадаптер (VGA)</string>
     <string name="hw_net_adapter">Сетевой адаптер</string>
-    <string name="hw_input_device">Устройство ввода (мышь/планшет)</string>
-    <string name="hw_audio_enable">Эмуляция звука (AC97 / HDA)</string>
+    <string name="hw_input_device">Устройство ввода</string>
+    <string name="hw_audio_enable">Включить звук (AC97 / HDA)</string>
     <string name="hw_kvm_enable">Аппаратное ускорение KVM (/dev/kvm)</string>
-    <string name="hw_mtcg_enable">Многопоточный процессор (MTTCG)</string>
+    <string name="hw_mtcg_enable">Многопоточный TCG (MTTCG)</string>
     <string name="hw_extra_args">Дополнительные аргументы QEMU</string>
+    <string name="hw_btn_presets">Библиотека параметров QEMU</string>
     <string name="hw_save_button">Сохранить конфигурацию</string>
 
     <!-- Snapshots Management -->
-    <string name="snap_title">Управление снапшотами</string>
-    <string name="snap_desc">Сохраняйте снимки состояния системы для мгновенного отката.</string>
-    <string name="snap_create_btn">+ Создать снапшот</string>
-    <string name="snap_name_hint">Имя снапшота (например: clean_install)</string>
-    <string name="snap_empty">Для этого диска нет сохранённых снапшотов.\nСоздайте снапшот, чтобы зафиксировать состояние.</string>
+    <string name="snap_title">Управление снимками (Snapshots)</string>
+    <string name="snap_desc">Сохраняйте контрольные точки состояния ВМ для мгновенного отката в любой момент.</string>
+    <string name="snap_create_btn">+ Создать снимок</string>
+    <string name="snap_name_hint">Имя снимка (напр. clean_install)</string>
+    <string name="snap_empty">Для этого диска снимков пока нет.\nСоздайте снимок, чтобы зафиксировать состояние системы.</string>
     <string name="snap_revert">Откатить</string>
     <string name="snap_delete">Удалить</string>
-    <string name="snap_revert_confirm">Откатить систему к снапшоту «%s»? Все несохранённые изменения будут сброшены.</string>
-    <string name="snap_delete_confirm">Удалить снапшот «%s»?</string>
+    <string name="snap_rename">Переименовать</string>
+    <string name="snap_rename_title">Переименовать снимок «%s»</string>
+    <string name="snap_revert_confirm">Откатить состояние к снимку \"%s\"? Все несохраненные изменения будут потеряны.</string>
+    <string name="snap_delete_confirm">Удалить снимок \"%s\"?</string>
 
     <!-- Shortcuts Helper Overlay -->
-    <string name="sc_helper_title">Горячие клавиши и команды</string>
+    <string name="sc_helper_title">Горячие клавиши и управление</string>
     <string name="sc_helper_collapse">Скрыть</string>
-    <string name="sc_helper_expand">⌨ Горячие клавиши</string>
-    <string name="sc_mode_touch">Режим Сенсора</string>
-    <string name="sc_mode_trackpad">Режим Трекпада</string>
-    <string name="sc_mode_touch_desc">Касание: ЛКМ · Удержание: ПКМ · 2 пальца: СКМ</string>
-    <string name="sc_mode_trackpad_desc">Стрелочный курсор ПК · Перетаскивание тапом · Прокрутка 2 пальцами</string>
+    <string name="sc_helper_expand">⌨ Сочетания</string>
+    <string name="sc_mode_touch">Сенсорный режим</string>
+    <string name="sc_mode_trackpad">Режим трекпада</string>
+    <string name="sc_mode_touch_desc">Касание: ЛКМ · Долгое: ПКМ · 2 пальца: Средняя кнопка</string>
+    <string name="sc_mode_trackpad_desc">Курсор-стрелка ПК · Перетаскивание кликом · Скролл колесом</string>
 
     <!-- System Monitor Overlay -->
-    <string name="mon_title">Системный мониторинг QEMU</string>
+    <string name="mon_title">Системный монитор QEMU</string>
     <string name="mon_cpu_load">Загрузка процессора</string>
     <string name="mon_ram_load">Использование памяти RAM</string>
     <string name="mon_status">Статус ВМ</string>
     <string name="mon_process_pid">PID процесса</string>
-    <string name="mon_active_threads">Потоков QEMU</string>
+    <string name="mon_active_threads">Активные потоки</string>
     <string name="mon_vnc_port">Порт VNC</string>
 
     <!-- Actions & Dialogs -->
-    <string name="action_rename_title">Переименовать ВМ</string>
+    <string name="action_rename_title">Переименование ВМ</string>
     <string name="action_delete_title">Удаление ВМ</string>
     <string name="delete_confirm_msg">Вы уверены, что хотите удалить эту виртуальную машину?</string>
-    <string name="delete_disk_prompt">Удалить вместе с файлом виртуального диска?</string>
+    <string name="delete_disk_prompt">Также удалить привязанный файл виртуального диска?</string>
 
     <!-- Top Menu & Context Menus -->
-    <string name="menu_language">Язык (Language)</string>
+    <string name="menu_language">Язык интерфейса</string>
     <string name="menu_qemu_status">Статус QEMU</string>
     <string name="menu_import_iso">Импорт ISO / Диска</string>
+    <string name="menu_export_configs">Экспорт конфигураций ВМ (JSON)</string>
+    <string name="menu_import_configs">Импорт конфигураций ВМ (JSON)</string>
+    <string name="menu_shortcuts_mapping">Настройка горячих клавиш</string>
+    <string name="menu_getting_started">Руководство «Быстрый старт»</string>
     <string name="menu_settings">Настройки</string>
     <string name="menu_about">О приложении</string>
-    <string name="menu_rename">Переименовать ВМ</string>
-    <string name="menu_clone">Дублировать ВМ</string>
-    <string name="menu_snapshots">Снапшоты (qcow2)</string>
-    <string name="menu_monitor">Мониторинг системы</string>
-    <string name="menu_logs">Логи</string>
+    <string name="menu_rename">Переименовать</string>
+    <string name="menu_clone">Дублировать</string>
+    <string name="menu_snapshots">Снимки состояния (qcow2)</string>
+    <string name="menu_monitor">Мониторинг ресурсов</string>
+    <string name="menu_logs">Журнал логов</string>
     <string name="menu_share">Поделиться конфигом</string>
-    <string name="menu_delete">Удалить ВМ</string>
+    <string name="menu_delete">Удалить</string>
 
-    <string name="vm_title_new">Параметры новой ВМ</string>
+    <string name="vm_title_new">Новая виртуальная машина</string>
     <string name="vm_btn_save">Сохранить</string>
-    <string name="vm_boot_hdd">Диск (HDD)</string>
+    <string name="vm_boot_hdd">Жесткий диск (HDD)</string>
     <string name="vm_boot_cdrom">CD-ROM (ISO)</string>
-    <string name="vm_net_user">Пользовательский NAT (rtl8139/virtio)</string>
+    <string name="vm_net_user">User NAT (rtl8139/virtio)</string>
     <string name="vm_net_none">Отключить сеть</string>
 
     <!-- VNC Viewer Toolbar & States -->
     <string name="vnc_connecting">Подключение к QEMU VNC…</string>
     <string name="vnc_retry">Повторить подключение</string>
-    <string name="vnc_external_app">Открыть во внешнем VNC</string>
-    <string name="vnc_copy_address">Скопировать 127.0.0.1:порт</string>
+    <string name="vnc_external_app">Открыть во внешнем VNC Viewer</string>
+    <string name="vnc_copy_address">Скопировать 127.0.0.1:port</string>
     <string name="vnc_view_logs">Логи QEMU</string>
-    <string name="vnc_touch_mode">🖱 Тач</string>
+    <string name="vnc_touch_mode">🖱 Сенсор</string>
     <string name="vnc_mouse_mode">🖱 Трекпад</string>
-    <string name="vnc_mode_touch_toast">Режим: Сенсорный экран (прямой тач)</string>
-    <string name="vnc_mode_mouse_toast">Режим: Мышь / Трекпад с курсором</string>
-    <string name="vnc_pc_keys">⌨ PC Клв</string>
+    <string name="vnc_mode_touch_toast">Режим: Сенсорный экран</string>
+    <string name="vnc_mode_mouse_toast">Режим: Трекпад с курсором мыши</string>
+    <string name="vnc_pc_keys">⌨ Клавиши ПК</string>
     <string name="vnc_soft_kbd">⌨ Клавиатура</string>
     <string name="vnc_zoom_in">Приблизить</string>
     <string name="vnc_zoom_out">Отдалить</string>
-    <string name="vnc_fit_screen">По размеру</string>
+    <string name="vnc_fit_screen">По экрану</string>
     <string name="vnc_reconnect">Переподключить</string>
     <string name="vnc_external_button">🔗 VNC</string>
+    <string name="vnc_send_text">💬 Текст</string>
+
+    <!-- Quick Actions & Floating Controls -->
+    <string name="qa_title">Быстрые действия</string>
+    <string name="qa_power_cycle">Цикл питания (Hard Reset)</string>
+    <string name="qa_force_reboot">Принудительная перезагрузка</string>
+    <string name="qa_fullscreen">Полноэкранный режим</string>
+    <string name="qa_snapshot">Сохранить снимок</string>
+    <string name="qa_open_vnc">Открыть экран VNC</string>
+    <string name="qa_console">Консоль вывода логов</string>
+
+    <!-- Mouse Positioning Modes (Absolute vs Relative) -->
+    <string name="mouse_mode_title">Режим позиционирования мыши</string>
+    <string name="mouse_mode_absolute">Абсолютное позиционирование</string>
+    <string name="mouse_mode_absolute_desc">Прямое соответствие координат касания (для современных ОС с драйвером USB Tablet)</string>
+    <string name="mouse_mode_relative">Относительное позиционирование</string>
+    <string name="mouse_mode_relative_desc">Режим трекпада с виртуальным курсором (предотвращает смещение и уход курсора в DOS, Win9x, WinXP, Linux)</string>
+    <string name="vnc_mode_absolute">Абсолютный (Планшет)</string>
+    <string name="vnc_mode_relative">Относительный (Трекпад)</string>
+    <string name="vnc_mouse_absolute_short">🖱 Абс</string>
+    <string name="vnc_mouse_relative_short">🖱 Отн</string>
+    <string name="vnc_mouse_absolute_toast">Режим мыши: АБСОЛЮТНЫЙ (Tablet)</string>
+    <string name="vnc_mouse_relative_toast">Режим мыши: ОТНОСИТЕЛЬНЫЙ (Трекпад / Защита от смещения)</string>
+    <string name="hw_mouse_mode">Режим позиционирования мыши</string>
+    <string name="hw_mouse_mode_label">Режим мыши (координаты)</string>
+
+    <!-- Input Debugger Overlay -->
+    <string name="dbg_title">Отладчик ввода VNC</string>
+    <string name="dbg_subtitle">Журнал событий KeyDown / KeyUp и указателя мыши</string>
+    <string name="dbg_toggle_btn">🐛 Отладка</string>
+    <string name="dbg_filter_all">Все события</string>
+    <string name="dbg_filter_keys">Только клавиши</string>
+    <string name="dbg_filter_mouse">Только мышь</string>
+    <string name="dbg_btn_clear">Очистить</string>
+    <string name="dbg_btn_copy">Скопировать лог</string>
+    <string name="dbg_btn_close">Закрыть</string>
+    <string name="dbg_empty">Событий ввода пока нет. Нажимайте клавиши или перемещайте мышь.</string>
+    <string name="dbg_copied_toast">Лог отладчика ввода скопирован в буфер обмена</string>
+
+    <!-- Virtual On-Screen PC Keyboard -->
+    <string name="vk_title">Экранная клавиатура ПК</string>
+    <string name="vk_tab_quick">⚡ Быстрые</string>
+    <string name="vk_tab_qwerty">🔤 QWERTY</string>
+    <string name="vk_tab_cyrillic">🇷🇺 RU</string>
+    <string name="vk_tab_fkeys">🎛 F-Клавиши</string>
+    <string name="vk_tab_nav">🔢 Навигация / Numpad</string>
+    <string name="vk_hold_ms">Удержание: %d мс</string>
+    <string name="vk_latch_ctrl">CTRL</string>
+    <string name="vk_latch_alt">ALT</string>
+    <string name="vk_latch_shift">SHIFT</string>
+    <string name="vk_latch_win">WIN</string>
+    <string name="vk_btn_toggle">⌨ Экранная КБ</string>
+    <string name="vk_toggle_btn">⌨ Экранная КБ</string>
 </resources>
